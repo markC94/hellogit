@@ -1,0 +1,33 @@
+1.label
+local chatStrLabel = cc.Label:createWithTTF(chatStr, "res/font/Arial.TTF", 28)
+chatStrLabel:setDimensions(446,0)
+chatStrLabel:setHorizontalAlignment(0)  --×ó¶ÔÆë/ÖÐ/ÓÒ
+chatStrLabel:setTextColor({ r = 37, g = 54, b = 101} )
+
+2.Scale9Sprite
+local chatBg = cc.Scale9Sprite:create("res/chat/chat_else_show.png")
+chatBg:setCapInsets(cc.rect(20,50,70,8))
+
+3.scrollview¹ö¶¯Ìõ
+self.chatListView_:setScrollBarOpacity(0)
+
+4.¼üÅÌ¼àÌý
+local listener = cc.EventListenerKeyboard:create()
+local function onKeyReleased(keyCode, event)
+    if keyCode == 164 then
+	self:sendChatContent()
+    end
+end
+listener:registerScriptHandler(onKeyReleased, cc.Handler.EVENT_KEYBOARD_RELEASED)
+cc.Director:getInstance():getEventDispatcher():addEventListenerWithSceneGraphPriority(listener, self)
+
+5.´¥Ãþ¼àÌý
+    local listener = cc.EventListenerTouchOneByOne:create()
+    listener:registerScriptHandler(onTouchBegin, cc.Handler.EVENT_TOUCH_BEGAN)
+    listener:registerScriptHandler(onTouchMove, cc.Handler.EVENT_TOUCH_MOVED)
+    listener:registerScriptHandler(onTouchEnd, cc.Handler.EVENT_TOUCH_ENDED)
+    cc.Director:getInstance():getEventDispatcher():addEventListenerWithSceneGraphPriority(listener, layer)
+
+6.
+local target = cc.Application:getInstance():getTargetPlatform()
+
