@@ -8,7 +8,9 @@ ChatLayer.TagBtnStatus = "game_chat"
 ChatLayer.InputBox = 3     --输入框种类 1.textField   2.editBox  3.自定义
 ChatLayer.MaxInputLenght = 120     --输入框最大输入长度
 ChatLayer.MaxMsgNum = 30    --最大存储数
+ChatLayer.InputBoxRow = 3   --聊天输入框行数
 ChatLayer.Target = cc.Application:getInstance():getTargetPlatform()
+
 
 function ChatLayer:onCreate()
     print("ChatLayer:onCreate")
@@ -77,7 +79,6 @@ function ChatLayer:onCreate()
     --创建键盘监听
     self:createEventListenerKeyboard()  
     
-
 end
 
 --初始化聊天记录
@@ -204,22 +205,22 @@ end
 --maxLen 每行最大长度
 function ChatLayer:getNewStr(str, fontSize, maxLen)
 --待优化
---[[
     str = str or ""
     fontSize = fontSize or 28
     maxLen = maxLen or 446
-    --local ttf =  cc.Label:createWithTTF("", "res/font/FZKTJW.TTF", fontSize)
     local t = string.split(str," ")
     local newStr = ""
     for i = 1, #t do
         if cc.Label:createWithTTF(t[i], "res/font/FZKTJW.TTF", fontSize):getContentSize().width > maxLen then
             local idex = 1
+            local time = 0
             for ii = 1, string.len(t[i]) do
-                local len = cc.Label:createWithTTF( string.sub(t[i],idex,ii), "res/font/FZKTJW.TTF", fontSize):getContentSize().width
+                local len = cc.Label:createWithTTF( string.sub(t[i],idex,ii + time), "res/font/FZKTJW.TTF", fontSize):getContentSize().width
                 if len > maxLen then
-                    t[i] = string.sub(t[i],1,ii - 1) .. "\n" .. string.sub(t[i], ii, -1)
+                    t[i] = string.sub(t[i],1,ii + time - 1) .. "\n" .. string.sub(t[i], ii + time , -1)
                     len = 0
-                    idex = ii
+                    idex = ii + 1
+                    time = time + 1
                 end
             end
         end
@@ -228,9 +229,8 @@ function ChatLayer:getNewStr(str, fontSize, maxLen)
         else
             newStr = newStr .. " " .. t[i]
         end
-    end--]]
-    --return newStr
-    return str
+    end
+    return newStr
 end
 
 ----editBox
@@ -313,7 +313,7 @@ function ChatLayer:inputBoxTouchEvent(sender, eventType)
     elseif eventType == ccui.TouchEventType.moved then
         self.moved_ = self.moved_ + 1
     elseif eventType == ccui.TouchEventType.ended then
-        if  self.moved_ < 4 then
+        if  self.moved_ < 8 then
             self.editBox_:touchDownAction(self.editBox_, 2) 
             self.textListView_:scrollToBottom(0,true)
         end
@@ -324,6 +324,7 @@ end
 
 function ChatLayer:refreshInputBox(str)
     self.inputLabel_:setString(self:getNewStr(str,36,458))
+    --print(self.inputLabel_:getString())
     local height = self.inputLabel_:getContentSize().height
 
     if height > 50 and height <= 78 then
@@ -349,28 +350,46 @@ function ChatLayer:refreshInputBox(str)
             self.chatListView_:jumpToBottom()
         end
     elseif height > 117 and height <= 156 then
-        if self.chatTextRow_ ~= 4 then
-            self.chatTextRow_ = 4
-            self.bottom_:getChildByName("bg"):setContentSize(670,210)
-            self.bottom_:getChildByName("inputBg"):setContentSize(486,184)
-            self.textListView_:setContentSize(460,160)
-            self.textListView_:setInnerContainerSize(cc.size(460,160))
-            self:upTextField(220)
-            self.chatListView_:setContentSize(630,self.chatListViewHeight_ - 120)
-            self.chatListView_:jumpToBottom()
+        if ChatLayer.InputBoxRow == 4 then
+            if self.chatTextRow_ ~= 4 then
+                self.chatTextRow_ = 4
+                self.bottom_:getChildByName("bg"):setContentSize(670,210)
+                self.bottom_:getChildByName("inputBg"):setContentSize(486,184)
+                self.textListView_:setContentSize(460,160)
+                self.textListView_:setInnerContainerSize(cc.size(460,160))
+                self:upTextField(220)
+                self.chatListView_:setContentSize(630,self.chatListViewHeight_ - 120)
+                self.chatListView_:jumpToBottom()
+            end
+        elseif ChatLayer.InputBoxRow == 3 then
+            if self.chatTextRow_ ~= 4 then
+                self.chatTextRow_ = 4
+                self.bottom_:getChildByName("bg"):setContentSize(670,170)
+                self.bottom_:getChildByName("inputBg"):setContentSize(486,144)
+                self.textListView_:setContentSize(460,120)
+                self.textListView_:setInnerContainerSize(cc.size(460,120))
+                self:upTextField(180)
+                self.chatListView_:setContentSize(630,self.chatListViewHeight_ - 80)
+                self.chatListView_:jumpToBottom()
+            end
+            self.textListView_:setInnerContainerSize(cc.size(460,height))
+            self.textListView_:scrollToBottom(0,true)
         end
     elseif height > 156 then
-        if self.chatTextRow_ ~= 5 then
-            self.chatTextRow_ = 5
-            self.bottom_:getChildByName("bg"):setContentSize(670,210)
-            self.bottom_:getChildByName("inputBg"):setContentSize(486,184)
-            self.textListView_:setContentSize(460,160)
-            self:upTextField(220)
-            self.chatListView_:setContentSize(630,self.chatListViewHeight_ - 120)
-            self.chatListView_:jumpToBottom()
+        if ChatLayer.InputBoxRow == 4 then
+            if self.chatTextRow_ ~= 5 then
+                self.chatTextRow_ = 5
+                self.bottom_:getChildByName("bg"):setContentSize(670,210)
+                self.bottom_:getChildByName("inputBg"):setContentSize(486,184)
+                self.textListView_:setContentSize(460,160)
+                self:upTextField(220)
+                self.chatListView_:setContentSize(630,self.chatListViewHeight_ - 120)
+                self.chatListView_:jumpToBottom()
+            end
         end
         self.textListView_:setInnerContainerSize(cc.size(460,height))
         self.textListView_:scrollToBottom(0,true)
+        
     else
         if self.chatTextRow_ ~= 1 then
             self.chatTextRow_ = 1
@@ -421,7 +440,11 @@ function ChatLayer:createChatWidget(uid,chatStr,chatTable)
         chatStrLabel:setString(chatStr)
         size = chatStrLabel:getContentSize()
     else
-        chatStrLabel:setHorizontalAlignment(2)  --右对齐
+        if isMe then  
+            chatStrLabel:setHorizontalAlignment(2)  --右对齐
+        else
+            chatStrLabel:setHorizontalAlignment(0)  --左对齐
+        end
     end
     chatStrLabel:setTextColor({ r = 37, g = 54, b = 101} )
 
@@ -453,7 +476,6 @@ function ChatLayer:createChatWidget(uid,chatStr,chatTable)
     else 
         --别人说话
         userName = uid
-        chatStrLabel:setHorizontalAlignment(0)  --左对齐
         chatBg = cc.Scale9Sprite:create("res/chat/chat_else_show.png")
         chatBg:setCapInsets(cc.rect(20,50,70,8))
         chatBg:setContentSize(size.width + 36, math.max(size.height + 40, 70))
