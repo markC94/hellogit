@@ -109,7 +109,7 @@ function TopLayer:touchEvent(sender, eventType)
         sender:setScale(1.0)
         print("Touch Up")
         if name == "btn_back" then
-            bole:getUIManage():openUI(bole.UI_NAME.LobbyScene)
+            bole:getUIManage():openUI("LobbyScene")
         end
     elseif eventType == ccui.TouchEventType.canceled then
         sender:setScale(1.0)

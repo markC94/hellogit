@@ -2,27 +2,15 @@
 -- Date
 -- 此文件由[BabeLua]插件自动生成
 
-local Theme_Gorilla = class("Theme_Gorilla", bole:getTable("app.theme.BaseTheme"))
+local Theme_gorilla = class("Theme_gorilla", bole:getTable("app.theme.BaseTheme"))
 
-function Theme_Gorilla:ctor(themeId, app)
-    print("Theme_Gorilla:ctor")
+function Theme_gorilla:ctor(themeId, app)
+    print("Theme_gorilla:ctor")
     self.allSymbolInfo = {}
-    Theme_Gorilla.super.ctor(self, themeId, app)
+    Theme_gorilla.super.ctor(self, themeId, app)
 end
 
-function Theme_Gorilla:onEnter()
-    print("Theme_Gorilla:onEnter")
-    Theme_Gorilla.super.onEnter(self)
-    bole:addListener("collectButterFlyEnd", self.onCollectResult, self, nil, true)
-end
-
-function Theme_Gorilla:onExit()
-    print("Theme_Gorilla:onExit")
-    bole:removeListener("collectButterFlyEnd", self)
-    Theme_Gorilla.super.onExit(self)
-end
-
-function Theme_Gorilla:onFirstEnter()
+function Theme_gorilla:onFirstEnter(data)
     for columnIndex, column in ipairs(self.stopReels) do
         for row, id in ipairs(column) do
             if id == 14 or id == 15 then
@@ -31,86 +19,101 @@ function Theme_Gorilla:onFirstEnter()
         end
     end
 
-    Theme_Gorilla.super.onFirstEnter(self)
+    Theme_gorilla.super.onFirstEnter(self, data)
 end
 
-function Theme_Gorilla:onStopFreeSpin(event)
-    print("Theme_Gorilla:onStopFreeSpin")
-    Theme_Gorilla.super.onStopFreeSpin(self, event)
-    self:onClearFixedSymbolLayer()
-end
-
-function Theme_Gorilla:setFreeSpinPosition(x, y)
-    y = y - 28
-    Theme_Gorilla.super.setFreeSpinPosition(self, x, y)
-end
-
-function Theme_Gorilla:setSpinBgPosition(node)
+function Theme_gorilla:setSpinBgPosition(node)
     node:setPositionY(node:getPositionY() - 16)
 end
 
-function Theme_Gorilla:onCreateViews()
-    print("Theme_Gorilla:onCreateViews")
-    Theme_Gorilla.super.onCreateViews(self)
+function Theme_gorilla:onCreateViews()
+    print("Theme_gorilla:onCreateViews")
+    Theme_gorilla.super.onCreateViews(self)
     self:onCreateCollect()
 end
 
-function Theme_Gorilla:enterThemeDataFilter(data)
-    print("Theme_Gorilla:enterThemeDataFilter")
-    Theme_Gorilla.super.enterThemeDataFilter(self, data)
+function Theme_gorilla:onCreateCollect()
+    print("Theme_gorilla:onCreateCollect")
+    local position = self.framBg:convertToWorldSpace(cc.p(0, self.framBg:getContentSize().height))
+    local colllectPos = self:convertToNodeSpace(position)
+    bole:getEntity("app.theme.gorilla.CollectView", self, self.collectMaxCount, self.collectProgress, self.collectCoinCount, THEME_CHILD_ORDER.COLLECT, colllectPos)
+end
+
+function Theme_gorilla:enterThemeDataFilter(data)
+    print("Theme_gorilla:enterThemeDataFilter")
+    Theme_gorilla.super.enterThemeDataFilter(self, data)
     --collect的三个数据
     self.collectMaxCount = data.collect_total_count  --收集的最大值
     self.collectCoinCount = data.collect_coin_pool or 0  --收集的金币数
     self.collectProgress = data.collect_count or 0  --收集的进度
 end
 
-function Theme_Gorilla:onDataFilter(data)
-    print("Theme_Gorilla:onDataFilter")
-    Theme_Gorilla.super.onDataFilter(self, data)
+function Theme_gorilla:onDataFilter(data)
+    print("Theme_gorilla:onDataFilter")
+    Theme_gorilla.super.onDataFilter(self, data)
 
     self.collectProgress = data.collect_count
     self.collectCoinCount = data.collect_coin_pool
     self.collectPosInfo = data.collect_data
 end
 
-function Theme_Gorilla:onDealWithFreeSpinFeatureData(batchData)
-    self.freeSpinFeatureId = nil
+function Theme_gorilla:onDealWithFreeSpinFeatureData(data)
+    self.freeSpinFeatureType = nil
     self.freeSpinChangePos = nil
 
-    for _, line in ipairs(batchData) do
-        if line.feature == 10101 or line.feature == 10102 then
-            self.freeSpinFeatureId = line.feature
-            self.freeSpinChangePos = line.icons
-            break
+    self.isCollectMiniGame = false
+
+    for _, id in ipairs(data.feature) do
+        local featureType = bole:getMiniGameControl():getFeatureType(id)
+        if featureType == 2 then  --collct minigame
+            self.isCollectMiniGame = true
+        elseif featureType == 6 or featureType == 7 then
+            self.freeSpinFeatureType = featureType
+        end
+    end
+
+    if self.freeSpinFeatureType then
+        for _, line in ipairs(data["win_lines"]) do
+            local feature = line.feature
+            if feature ~= 0 then
+                local featureType = bole:getMiniGameControl():getFeatureType(feature)
+                if featureType == self.freeSpinFeatureType then
+                    self.freeSpinChangePos = line.icons
+                    break
+                end
+            end
         end
     end
 end
 
-function Theme_Gorilla:onCreateCollect()
-    print("Theme_Gorilla:onCreateCollect")
-    local position = self.framBg:convertToWorldSpace(cc.p(0, self.framBg:getContentSize().height))
-    local colllectPos = self:convertToNodeSpace(position)
-    self.collect = bole:getEntity("app.theme.gorilla.CollectView", self, self.collectMaxCount, self.collectProgress, self.collectCoinCount, THEME_CHILD_ORDER.COLLECT, colllectPos)
+function Theme_gorilla:onCollect(data)
+    print("Theme_gorilla:onCollect")
+    local funcEnd
+    if self.isCollectMiniGame then
+        funcEnd = function()
+            self.isCollectMiniGame = false
+            self:onMiniGame()
+        end
+    end
+    bole:postEvent("collectButterFly", {pos = self.collectPosInfo, collectProgress = self.collectProgress, collectCoin = self.collectCoinCount, backFunc = funcEnd})
 end
 
-function Theme_Gorilla:onCollect(data)
-    print("Theme_Gorilla:onCollect")
-    bole:postEvent("collectButterFly", {pos = self.collectPosInfo, collectProgress = self.collectProgress, collectCoin = self.collectCoinCount})
-    if self.collectPosInfo and #self.thisReceiveData["feature"] == 0 then
-        bole:postEvent("spinStatus", "spinEnabled")
+function Theme_gorilla:onMiniEffect(data)
+    print("Theme_gorilla:onMiniEffect")
+    Theme_gorilla.super.onMiniEffect(self, data)
+    self:onCollect(data)
+end
+
+function Theme_gorilla:onMiniGame()
+    print("Theme_gorilla:onMiniGame")
+    if not self.isCollectMiniGame then
+        Theme_gorilla.super.onMiniGame(self)
     end
 end
 
-function Theme_Gorilla:onCollectResult(event)
-    print("Theme_Gorilla:onCollectResult")
-    local eventName = "collect"
-    self.curStepName = eventName
-    self:onNext()
-end
-
-function Theme_Gorilla:onChangeScatter(data)
+function Theme_gorilla:onChangeScatter(data)
     local flag = false
-    if self.freeSpinFeatureId == 10102 then
+    if self.freeSpinFeatureType == 7 then
         local count = 0
         for _, pos in ipairs(self.freeSpinChangePos) do
             local columnIndex = pos[1]
@@ -125,7 +128,7 @@ function Theme_Gorilla:onChangeScatter(data)
                         self:onChangeScatterResult()
                     end
                 end
-                self:createAnimNode(pos[1], pos[2], "wild", false, true, endCallback)
+                self:createAnimNode(pos[1], pos[2], "wild", false, true, true, endCallback)
                 self:onRemoveFixedSymbol(columnIndex, row)
                 flag = true
             end
@@ -137,66 +140,82 @@ function Theme_Gorilla:onChangeScatter(data)
     end
 end
 
-function Theme_Gorilla:onChangeScatterResult(event)
-    local eventName = "changeScatter"
-    self.curStepName = eventName
+function Theme_gorilla:onChangeScatterResult(event)
+    self.curStepName = "changeScatter"
     self:onNext()
 end
 
-function Theme_Gorilla:onChangeWild(data)
+function Theme_gorilla:onDealWithMiniGameData(data)
+    print("Theme_gorilla:onDealWithMiniGameData")
+    if data and data.isDeal then
+        bole:postEvent("gorillaAfterMini")
+    end
+end
+
+function Theme_gorilla:onChangeWild(data)
     local flag = false
-    if self.freeSpinFeatureId == 10101 or self.freeSpinFeatureId == 10102 then
-        local count = 0
+    if self.freeSpinFeatureType == 6 or self.freeSpinFeatureType == 7 then
         for _, pos in ipairs(self.freeSpinChangePos) do
             local id = self.stopReels[pos[1]][pos[2]]
             if id == 13 or id == 15 then
-                count = count + 1
-                
-                local function endCallback()
-                    self:onCreateFixedSymbol(pos[1], pos[2], 14)
-                    count = count - 1
-                    if count == 0 then
-                        self:onChangeWildResult()
-                    end
-                end
-
-                self:createAnimNode(pos[1], pos[2], "scatter", false, true, endCallback)
-                self:onRemoveFixedSymbol(pos[1], pos[2])
                 flag = true
+                break
             end
         end
     end
     
-    if not flag then
-        self:onChangeWildResult()
+    if flag then
+        local function waitFunc()
+            self:execChangeWild(data)
+        end
+        self:addWaitEvent("gorillaExecChangeWild", 1, waitFunc)
+        self.winTime = 0
+    else
+        self:onChangeWildResult(data)
     end
 end
 
-function Theme_Gorilla:onChangeWildResult(event)
-    local eventName = "changeWild"
-    self.curStepName = eventName
-    self:onNext()
+function Theme_gorilla:execChangeWild(data)
+    local count = 0
+    for _, pos in ipairs(self.freeSpinChangePos) do
+        local id = self.stopReels[pos[1]][pos[2]]
+        if id == 13 or id == 15 then
+            count = count + 1
+
+            local function endCallback()
+                self:onCreateFixedSymbol(pos[1], pos[2], 14)
+                count = count - 1
+                if count == 0 then
+                    self:onChangeWildResult(data)
+                end
+            end
+
+            self:createAnimNode(pos[1], pos[2], "scatter", false, true, true, endCallback)
+            self:onRemoveFixedSymbol(pos[1], pos[2])
+        end
+    end
 end
 
-function Theme_Gorilla:addListeners()
-    Theme_Gorilla.super.addListeners(self)
-    self:addListenerForNext("popupDialog", self.onCollect)
-    self:addListenerForNext("collect", self.onChangeScatter)
+function Theme_gorilla:onChangeWildResult(data)
+    self.curStepName = "changeWild"
+    self:onNext(data)
+end
+
+function Theme_gorilla:addListeners()
+    Theme_gorilla.super.addListeners(self)
+    self:addListenerForNext("popupDialog", self.onChangeScatter)
     self:addListenerForNext("changeScatter", self.onMiniEffect)
-    self:addListenerForNext("miniEffectEnd", self.onChangeWild)
-    self:addListenerForNext("changeWild", self.onMiniGame)
+    self:addListenerForNext("miniGameBack", self.onChangeWild)
+    self:addListenerForNext("changeWild", self.onDealNextSpin)
 end
 
-function Theme_Gorilla:getFrameNameById(id, noChangeId)
-    if not noChangeId and id == 14 then
+function Theme_gorilla:getSymbolInfo(info)
+    if info.symbol == 14 then
         local filled_reserve = self.matrix.filled_reserve
-        id = filled_reserve[math.random(#filled_reserve)]
+        info.symbol = filled_reserve[math.random(#filled_reserve)]
     end
-    return Theme_Gorilla.super.getFrameNameById(self, id)
-end
 
-function Theme_Gorilla:getSymbolInfo(info)
-    local isNew = Theme_Gorilla.super.getSymbolInfo(self, info)
+    local isNew = Theme_gorilla.super.getSymbolInfo(self, info)
     if isNew then
         table.insert(self.allSymbolInfo, info)
     end
@@ -204,20 +223,18 @@ function Theme_Gorilla:getSymbolInfo(info)
     info.label = nil
     sp:removeAllChildren(true)
     if info.symbol == 16 then --收集的单独处理
-        local spStr = string.format("#theme/theme%s/gorilla_collection2.png", self.themeId)
-        local butterflySp = display.newSprite(spStr)
+        local butterflySp = display.newSprite("#symbol/gorilla_collection2.png")
         sp:addChild(butterflySp, 1, 10)
         butterflySp:setPosition(71.5, 50.5)
 
-        local outStr = string.format("#theme/theme%s/gorilla_collection3.png", self.themeId)
-        local outSp = display.newSprite(outStr)
+        local outSp = display.newSprite("#symbol/gorilla_collection3.png")
         sp:addChild(outSp, 2, 20)
-        outSp:setPosition(71.5, 18)
+        outSp:setPosition(71.5, 29)
 
-        local label = cc.Label:create()
+        local label = cc.LabelBMFont:create("", "common_fnt/ziti08.fnt")
+        label:setScale(0.45)
         self:setSymbolCoin(label)
-        label:setPosition(outSp:getContentSize().width/2, outSp:getContentSize().height/2+4)
-        label:setSystemFontSize(30)
+        label:setPosition(outSp:getContentSize().width/2, outSp:getContentSize().height/2+8)
         outSp:addChild(label)
         info.label = label
     end
@@ -225,19 +242,23 @@ function Theme_Gorilla:getSymbolInfo(info)
     return isNew
 end
 
-function Theme_Gorilla:onDealWithMiniGameData(data)
-    print("Theme_Gorilla:onDealWithMiniGameData")
-    if data and data.isDeal then
-        self.collect:afterMiniGame()
+function Theme_gorilla:onClearFixedSymbolLayer()
+    for key, node in pairs(self.fixedSymbol) do
+        local pos = string.split(key, "_")
+        local info = self:getSpinNodeInfoByPos(tonumber(pos[1]), tonumber(pos[2]))
+        info.symbol = 14
+        self:getSymbolInfo(info)
     end
+
+    Theme_gorilla.super.onClearFixedSymbolLayer(self)
 end
 
-function Theme_Gorilla:setSymbolCoin(label)
-    label:setString(bole:formatCoins(self:getSpinCost()/100, 3))
+function Theme_gorilla:setSymbolCoin(label)
+    label:setString("$"..bole:formatCoins(self:getSpinCost()/100, 3))
 end
 
-function Theme_Gorilla:setBetValue(value)
-    Theme_Gorilla.super.setBetValue(self, value)
+function Theme_gorilla:changedBetValue()
+    Theme_gorilla.super.changedBetValue(self)
     for _, info in ipairs(self.allSymbolInfo) do
         if info.label then
             self:setSymbolCoin(info.label)
@@ -245,72 +266,11 @@ function Theme_Gorilla:setBetValue(value)
     end
 end
 
-function Theme_Gorilla:removeButterFly(column, row)
+function Theme_gorilla:removeButterFly(column, row)
     local symbolNode = self:getSymbolNodeByPos(column, row)
     symbolNode:removeChildByTag(10)
 end
 
-function Theme_Gorilla:onSpinPrompt(stopReels)
-    local bonusWinReels = self:getBonusWin()
-    if not bonusWinReels then return end
-
-    self.promptSuccessId = nil
-    self.promptBonusColumnIndex = {}
-    self.promptBonusPos = {}
-
-    local minWinColumnIndex = #stopReels
-    for _, reelItem in ipairs(bonusWinReels) do
-        local totalNum = 0
-        for columnIndex, column in ipairs(stopReels) do
-            local thisTotal = 0
-            self.promptBonusPos[columnIndex] = self.promptBonusPos[columnIndex] or {}
-            local columnMaxNum = reelItem.reel_max[columnIndex]
-            if columnMaxNum > 0 then
-                local arrayIn = reelItem.reels[columnIndex]
-                local remainLen = 0
-                local lastTag = -100
-                for row = #column, 1, -1 do
-                    local tag = column[row]
-                    local symbolNum = self:getSymbolNumById(tag)
-                    local bonusFlag = true
-                    if symbolNum > 1 then
-                        if tag == lastTag and remainLen > 0 then
-                            remainLen = remainLen - 1
-                            bonusFlag = false
-                        else
-                            remainLen = symbolNum - 1
-                        end
-                    else
-                        remainLen = 0
-                    end
-
-                    if bonusFlag and arrayIn[tag] then
-                        thisTotal = thisTotal + 1
-                        self.promptBonusPos[columnIndex][row] = true
-                        if thisTotal == columnMaxNum then
-                            break
-                        end
-                    end
-                    lastTag = tag
-                end
-
-                if thisTotal > 0 then
-                    totalNum = totalNum + thisTotal
-                    self.promptBonusColumnIndex[columnIndex] = reelItem.prompt_sound
-                else
-                    if minWinColumnIndex > columnIndex then
-                        minWinColumnIndex = columnIndex
-                    end
-                    break
-                end
-            end
-        end
-    end
-
-    self.spinView:onStopWinBonusAction(6)
-    self.spinView:onChangeWinBonus(minWinColumnIndex)
-end
-
-return Theme_Gorilla
+return Theme_gorilla
 
 -- endregion

@@ -1,3 +1,4 @@
+local testFrames = false
 local SpinAction = class("SpinAction")  -- 动作的基础类(抽象的类)
 function SpinAction:ctor(duration)
     self.duration = duration
@@ -5,6 +6,24 @@ function SpinAction:ctor(duration)
     self.isFirst = true
     self.timeOver = false  -- 动作结束
     self.eventCommand = {} -- 动作事件注册
+
+    if testFrames then
+        self.frameCount = 0
+        self.log = {}
+    end
+end
+
+function SpinAction:setName(name)
+    if testFrames then
+        self.actionName = name
+    end
+end
+
+function SpinAction:recordEachFrame(dt, s)
+    if testFrames then
+        local info = {dt, s}
+        table.insert(self.log, info)
+    end
 end
 
 function SpinAction:isDone()
@@ -15,22 +34,33 @@ function SpinAction:isRunning()
     return not self.isFirst
 end
 
-function SpinAction:execAction()
+function SpinAction:execAction(tag)
+    if testFrames then
+        self.target:recordLog("execAction name=" .. self.actionName)
+    end
 end
 
 function SpinAction:stop()
     self.timeOver = true
+
+    if testFrames then
+        self.target:recordLog(string.format("stopAciton name=%s,time=%f,frames=%d,s=%f", self.actionName, self.elapsed, self.frameCount, self.movedDistance or 0))
+        self.target:recordEachFrameLog(self.actionName, self.log)
+    end
 end
 
 function SpinAction:update(s)
-    self.target:step(s)
+    return self.target:step(s)
 end
 
 -- 动作执行的第一帧执行的方法
 function SpinAction:init()
+    if testFrames then
+        self.target:recordLog("aciton start name=" .. self.actionName)
+    end
 end
 
-function SpinAction:step(dt, isCutTime)
+function SpinAction:step(dt)
     if not self.target then return false end
 
     if self.isFirst then
@@ -43,9 +73,13 @@ function SpinAction:step(dt, isCutTime)
 
     self.elapsed = self.elapsed + dt
 
+    if testFrames then
+        self.frameCount = self.frameCount + 1
+    end
+
     if self.elapsed >= self.duration then
         self.timeOver = true
-        if isCutTime or self:getTagEnabled("cutTime") then
+        if self:getTagEnabled("cutTime") then
             self.elapsed = self.duration
         end
     end
@@ -53,11 +87,23 @@ function SpinAction:step(dt, isCutTime)
     return true
 end
 
+function SpinAction:overTime()
+    if self.elapsed + 0.5*self.target:getFrameInterval() > self.duration then
+        self.timeOver = true
+        self:actionDoneCallback()
+    end
+end
+
 function SpinAction:runWithTarget(target)
     self.target = target
 end
 
 function SpinAction:actionDoneCallback()
+    if testFrames then
+        self.target:recordLog(string.format("aciton end name=%s,time=%f,frames=%d,s=%f", self.actionName, self.elapsed, self.frameCount, self.movedDistance or 0))
+        self.target:recordEachFrameLog(self.actionName, self.log)
+    end
+
     if self.endCallback then
         self.endCallback()
     end
@@ -99,7 +145,7 @@ end
 
 function SpinAction:execByTag(tag)
     if self[tag .. "Enabled"] then
-        self:execAction()
+        self:execAction(tag)
     end
 end
 
@@ -112,12 +158,21 @@ function SpinSpeedAction:ctor(duration, accelerate)
 end
 
 function SpinSpeedAction:step(dt)
+    local lastElapsed
+    if testFrames then
+        lastElapsed = self.elapsed
+    end
+
     if not SpinSpeedAction.super.step(self, dt) then return false end
 
     local s = self.speed * self.elapsed + 0.5 * self.accelerate * math.pow(self.elapsed, 2)
     local disLen = s - self.movedDistance
     self.movedDistance = s
     self:update(disLen)
+
+    if testFrames then
+        self:recordEachFrame(self.elapsed-lastElapsed, disLen)
+    end
 
     if self.accelerate ~= 0 then
         self.target:setSpeed(self.speed + self.accelerate * self.elapsed)
@@ -126,15 +181,28 @@ function SpinSpeedAction:step(dt)
     if self.timeOver then
         self:actionDoneCallback()
     else
-        if self:getTagEnabled("useRemain") and self.elapsed + 0.01 > self.duration then
-            self:step(self.duration - self.elapsed + 0.001, true)
+        if self.elapsed + self.target:getFrameInterval() > self.duration then
+            self:overTime()
         end
     end
 
     return true
 end
 
+function SpinSpeedAction:execAction(tag)
+    SpinSpeedAction.super.execAction(self, tag)
+    if tag == "questNetData" then
+        if not self.timeOver then
+            self.duration = self.elapsed + 0.02
+        end
+    end
+end
+
 function SpinSpeedAction:reset()
+    if testFrames then
+        self.target:recordLog(string.format("reset action name=%s,duration=%f,frames=%d,s=%f", self.actionName, self.elapsed, self.frameCount, self.movedDistance or 0))
+    end
+
     self.elapsed = 0
     self.movedDistance = 0
 end
@@ -147,6 +215,7 @@ function SpinDelayAction:ctor(duration, isKeepStop)
 end
 
 function SpinDelayAction:init()
+    SpinDelayAction.super.init(self)
     if self.isKeepStop then
         self.speed = 0
     end
@@ -174,15 +243,14 @@ function SpinWinBonusAction:step(dt)
     if self.accelerateEnabled and self.accelerate == 0 then
         local speed = self.target:getSpeed()
         self.accelerate = (self.lastSpeed-speed)/self.accelerateTime
-        bole:postEvent("promptSuccess", self.target:getIndex())
+        bole:postEvent("promptSuccess", self.target:getColumnIndex())
+        self.target:execByTag("movie")
     end
 
     local result = SpinWinBonusAction.super.step(self, dt)
 
-    if self.accelerateEnabled then
+    if self.accelerateEnabled and not self:isDone() then
         if self.elapsed >= self.accelerateTime then
-            self:setTagEnabled("useRemain")
-
             self.accelerate = 0
             self.speed = self.target:getSpeed()
             
@@ -195,7 +263,8 @@ function SpinWinBonusAction:step(dt)
     return result
 end
 
-function SpinWinBonusAction:execAction()
+function SpinWinBonusAction:execAction(tag)
+    SpinWinBonusAction.super.execAction(self, tag)
     self:reset()
     self.duration = self.delayDuration + self.accelerateTime
     self.accelerateEnabled = true
@@ -210,6 +279,7 @@ function SpinTrueReelAction:ctor(speed)
 end
 
 function SpinTrueReelAction:init()
+    SpinTrueReelAction.super.init(self)
     if self.speed > 5000 then
         self.speed = 5000
     end
@@ -220,22 +290,25 @@ function SpinTrueReelAction:init()
         self.target:setSpeed(self.speed)
     end
 
-    self.duration = self.needMoveLen / self.speed + 0.00001
+    self.duration = (self.needMoveLen+1) / self.speed
     self.target:startReplaceTrueReel()
-    self:setTagEnabled("useRemain")
 end
 
-function SpinTrueReelAction:execAction()
+function SpinTrueReelAction:overTime()
+end
+
+function SpinTrueReelAction:execAction(tag)
+    SpinTrueReelAction.super.execAction(self, tag)
     if self.clickStop then
         return
     end
 
-    if self.needMoveLen and self.elapsed + 0.05 < self.duration then
+    if self.needMoveLen and self.elapsed + 5*self.target:getFrameInterval() < self.duration then
         self.needMoveLen = self.needMoveLen - self.movedDistance
         self.speed = self.stopClickSpeed
         self.target:setSpeed(self.speed)
 
-        self.duration = self.needMoveLen / self.speed + 0.00001
+        self.duration = (self.needMoveLen+1) / self.speed
         self:reset()
     end
     self.clickStop = true
@@ -250,6 +323,7 @@ function SpinStopAction:ctor(speed)
 end
 
 function SpinStopAction:init()
+    SpinStopAction.super.init(self)
     self.needMoveLen = self.target:getRemainLen()
     if self.clickStop then
         self.speed = self.stopClickSpeed
@@ -258,15 +332,15 @@ function SpinStopAction:init()
 
     self.duration = self.needMoveLen / self.speed
     self:setTagEnabled("cutTime")
-    self:setTagEnabled("useRemain")
 end
 
-function SpinStopAction:execAction()
+function SpinStopAction:execAction(tag)
+    SpinStopAction.super.execAction(self, tag)
     if self.clickStop then
         return
     end
 
-    if self.needMoveLen and self.elapsed + 0.05 < self.duration then
+    if self.needMoveLen and self.elapsed + 5*self.target:getFrameInterval() < self.duration then
         self.needMoveLen = self.needMoveLen - self.movedDistance
         self.speed = self.stopClickSpeed
         self.target:setSpeed(self.speed)
@@ -277,16 +351,23 @@ function SpinStopAction:execAction()
     self.clickStop = true
 end
 
+local ignoreLenMix = 0.8
 -- 特殊处理 （只会在checkAction的地方调用，少调用一次）
 function SpinStopAction:isDone()
     if SpinStopAction.super.isDone(self) then
         return true
     else
         if not self:isRunning() then
-            return self.target:getRemainLen() < 1
+            return self.target:getRemainLen() < ignoreLenMix*self.target:getFirstMovieLen()
         else
             return false
         end
+    end
+end
+
+function SpinStopAction:overTime()
+    if self.target:getRemainLen() < ignoreLenMix*self.target:getFirstMovieLen() then
+        SpinStopAction.super.overTime(self)
     end
 end
 
@@ -296,13 +377,44 @@ function SpinJumpAction:ctor(movie)
     SpinJumpAction.super.ctor(self)
     self.movie = movie
     self:setTagEnabled("movie")
+
+    local maxIndex = 1
+    local maxLen = movie[maxIndex]
+    for k, v in ipairs(self.movie) do
+        if v > maxLen then
+            maxLen = v
+            maxIndex = k
+        else
+            break
+        end
+    end
+    self.maxIndex = maxIndex
+    self.maxLen = maxLen
 end
 
 function SpinJumpAction:init()
+    SpinJumpAction.super.init(self)
     self.index = 1
     self.movedDistance = 0
     self.duration = 2
-    bole:postEvent("audio_reel_stop")
+    
+    self.remainLenForEachFrame = self.target:getMinRemain()
+
+    if testFrames then
+        self.target:recordLog(string.format("triggerStopEvent remainLenForEachFrame=%f, maxlen=%d", self.remainLenForEachFrame, self.maxLen))
+    end
+end
+
+function SpinJumpAction:triggerStopEvent()
+    if not self.hadColumnStop then
+        self.hadColumnStop = true
+
+        bole:postEvent("columnStop", {self.target:getColumnIndex(), self.noJump})
+
+        if testFrames then
+            self.target:recordLog(string.format("triggerStopEvent backLen=%f", remainLen))
+        end
+    end
 end
 
 function SpinJumpAction:step(dt)
@@ -313,17 +425,39 @@ function SpinJumpAction:step(dt)
 
     self.movedDistance = thisBouncePosY
 
-    self:update(disLen)
+    if self.index <= self.maxIndex and self.remainLenForEachFrame > 0 then
+        disLen = disLen + self.remainLenForEachFrame*disLen/self.maxLen
+    end
+
+    local isUpdate = self:update(disLen)
+
+    if testFrames then
+        self:recordEachFrame(dt, disLen)
+    end
+
+    if self.remainLenForEachFrame == 0 and self.index == 1 then
+        self:triggerStopEvent()
+    elseif isUpdate and self.index <= self.maxIndex then
+        self:triggerStopEvent()
+    end
 
     self.index = self.index + 1
-    if self.index > #self.movie then
-        self.timeOver = true
-        self:actionDoneCallback()
-        self.target:resetPos()
-        bole:postEvent("columnStop", self.target:getIndex())
+    if (self.noJump and self.hadColumnStop) or self.index > #self.movie then
+        self:overTime()
     end
 
     return true
+end
+
+function SpinJumpAction:execAction(tag)
+    self.noJump = true
+end
+
+function SpinJumpAction:overTime()
+    self.timeOver = true
+    self.target:resetPos()
+    bole:postEvent("columnStopCalm", self.target:getColumnIndex())
+    self:actionDoneCallback()
 end
 
 
@@ -445,26 +579,27 @@ function ActionQueue:clear()
 end
 
 
-local ActionNode = class("ActionNode")
-function ActionNode:ctor(spinColumn, theme)
-    self.spinColumn = spinColumn
+local SpinColumn = class("SpinColumn")
+function SpinColumn:ctor(columnIndex, spinView, theme)
+    self.columnIndex = columnIndex
+    self.spinView = spinView
     self.theme = theme
+
     self.app = theme:getSpinApp()
     self.themeId = theme:getThemeId()
 
-    local column = spinColumn:getColumnIndex()
     local matrix = theme:getMatrix()
-    self.row = matrix.array[column]  --本列的行数
+    self.row = matrix.array[columnIndex]  --本列的行数
     self.rowNeedNum = matrix.filled  --本列上下需要填充的行数
     self.rowCount = self.row + 2*self.rowNeedNum  --这一列的总长度，包括棋盘的长度和上下填充的长度
     self.updateLen = matrix.cell_size[2] -- 纵向的两格之间的距离(移动一格的距离，也是更新symbol的触发距离)
     
-    local bottomPos = matrix.coordinate[column]
+    local bottomPos = matrix.coordinate[columnIndex]
     self.bottomPosY = bottomPos.y - self.updateLen * self.rowNeedNum  -- 最下面一行的位置(多出rowNeedNum格位置)
     self.bottomPosX = bottomPos.x
 
-    self.trueSymbols = self.spinColumn:getTrueReel()
-    self.falseSymbols = self.spinColumn:getFalseReel()
+    self.trueSymbols = self:getTrueReel()
+    self.falseSymbols = self:getFalseReel()
     self.startFalseReelIndex = 1
     self.startTrueReelIndex = 1
     self.remainLenNum = 0  --剩余长条的个数
@@ -481,9 +616,22 @@ function ActionNode:ctor(spinColumn, theme)
 
     self.actionQueue = ActionQueue:create()
     self:clear()
+
+    if testFrames then
+        self.log = {}
+        self.eachFrameLog = {}
+    end
 end
 
-function ActionNode:clearRemainLongSymbol()
+function SpinColumn:getFrameInterval()
+    return self.spinView:getFrameInterval()
+end
+
+function SpinColumn:getNodeHeight()
+    return self.updateLen
+end
+
+function SpinColumn:clearRemainLongSymbol()
     if self.remainLenNum > 0 then
         local symbolLen = self.theme:getSymbolNumById(self.lastId)
         for i = #self.nodes, #self.nodes - (symbolLen - self.remainLenNum) + 1, -1 do  --替换非长条的
@@ -496,42 +644,87 @@ function ActionNode:clearRemainLongSymbol()
     self.remainLenNum = 0
 end
 
-function ActionNode:getIndex()
-    return self.spinColumn:getColumnIndex()
+function SpinColumn:getColumnIndex()
+    return self.columnIndex
 end
 
-function ActionNode:clear()
+function SpinColumn:clear()
     self.actionQueue:clear()
     self.trueSymbols = nil
     self.startTrueReelIndex = 0   -- 替换真滚轴的标志，以及替换的index
     self.speed = 0  -- 为了使速度不出现间隔性跳跃，移动的速度统一由actionNode统一管理
     self:reVisibleSymbol()
+    self:clearAnimNodes()
 end
 
-function ActionNode:resetPos()
+function SpinColumn:resetPos()
+    local remainLen = self.curThisMove
     self.curThisMove = 0
     self:reel()
+    return remainLen
 end
 
-function ActionNode:getRemainLen()
+function SpinColumn:getRemainLen()
     return self.updateLen - self.curThisMove
 end
 
+function SpinColumn:getFirstMovieLen()
+    return self.firstMovieLen
+end
+
+function SpinColumn:getMinRemain()
+    if self.curThisMove < 1 or self.updateLen - self.curThisMove < 1 then
+        return 0
+    else
+        return self:getRemainLen()
+    end
+end
+
 --替换真滚轴需要走的距离
-function ActionNode:getTrueReelUpdateLen()
+function SpinColumn:getTrueReelUpdateLen()
     return (self.rowCount - 2) * self.updateLen
 end
 
-function ActionNode:reel()
+function SpinColumn:addMoveNode(node, sp)
     for i, v in ipairs(self.nodes) do
-        if v.node and not v.isHide then
-            local num = self.theme:getSymbolNumById(v.symbol)
-            v.node:setPositionY(self.bottomPosY + (i - 1 + num/2) * self.updateLen - self.curThisMove)
+        if v.node == sp then
+            v.animNode = node
+            break
         end
     end
 end
 
-function ActionNode:getNodeByReelRow(row)
+function SpinColumn:clearAnimNodes()
+    for i, v in ipairs(self.nodes) do
+        if v.animNode then
+            v.animNode = nil
+        end
+    end
+end
+
+function SpinColumn:reel()
+    for i, v in ipairs(self.nodes) do
+        if v.node and not v.isHide then
+            local num = self.theme:getSymbolNumById(v.symbol)
+            local posY = self.bottomPosY + (i - 1 + num/2) * self.updateLen - self.curThisMove
+            v.node:setPositionY(posY)
+            local animNode = v.animNode
+            if animNode then
+                animNode:setPositionY(posY)
+            end
+        end
+    end
+end
+
+function SpinColumn:setVisible(isVisible)
+    for i, v in ipairs(self.nodes) do
+        if v.node and not v.isHide then
+            v.node:setVisible(isVisible)
+        end
+    end
+end
+
+function SpinColumn:getSymbolSprite(row)
     local nodeIndex = self.rowCount - self.rowNeedNum - row + 1
     local info = self.nodes[nodeIndex]
     if not info.node or info.isHide then
@@ -548,23 +741,31 @@ function ActionNode:getNodeByReelRow(row)
     return nil
 end
 
-function ActionNode:update(dt)
+function SpinColumn:getNodeInfo(row)
+    local nodeIndex = self.rowCount - self.rowNeedNum - row + 1
+    return self.nodes[nodeIndex]
+end
+
+function SpinColumn:update(dt)
     self.actionQueue:update(dt)
 end
 
-function ActionNode:step(s)
+function SpinColumn:step(s)
+    local isUpdate = false
     self.curThisMove = self.curThisMove + s
     if self.curThisMove >= self.updateLen then
         local num = math.floor(self.curThisMove / self.updateLen)
         self.curThisMove = self.curThisMove - self.updateLen * num
         self:updateSymbols(num)
+        isUpdate = true
     elseif self.curThisMove < 0 then
         self.curThisMove = 0
     end
     self:reel()
+    return isUpdate
 end
 
-function ActionNode:genSymbolTagInfo(info)
+function SpinColumn:genSymbolTagInfo(info)
     if not info then
         info = {}
     end
@@ -592,7 +793,7 @@ function ActionNode:genSymbolTagInfo(info)
     return info
 end
 
-function ActionNode:updateSymbols(num)
+function SpinColumn:updateSymbols(num)
     for i = 1, num do
         local info = table.remove(self.nodes, 1)
         table.insert(self.nodes, info)
@@ -602,7 +803,39 @@ function ActionNode:updateSymbols(num)
     self:reorderSymbol()
 end
 
-function ActionNode:setTrueReel(trueSymbols, falseSymbols)
+function SpinColumn:recordLog(content)
+    if testFrames then
+        table.insert(self.log, content)
+    end
+end
+
+function SpinColumn:recordEachFrameLog(name, tableInfo)
+    if testFrames then
+        local info = {name, tableInfo}
+        table.insert(self.eachFrameLog, info)
+    end
+end
+
+function SpinColumn:printLog()
+    if not testFrames then return end
+
+    print("column\t" .. self:getColumnIndex())
+    for _, v in ipairs(self.log) do
+        print(v)
+    end
+
+    for _, info in pairs(self.eachFrameLog) do
+        print("aciton\t" .. info[1] .. "\tframeCount=" .. #info[2])
+        for _, item in ipairs(info[2]) do
+            print(string.format("dt=%f\ts=%f", item[1], item[2]))
+        end
+    end
+
+    self.log = {}
+    self.eachFrameLog = {}
+end
+
+function SpinColumn:setTrueReel(trueSymbols, falseSymbols)
     self.trueSymbols = trueSymbols
     self.falseSymbols = falseSymbols
     self.startFalseReelIndex = 1
@@ -610,18 +843,18 @@ function ActionNode:setTrueReel(trueSymbols, falseSymbols)
     self.actionQueue:stopByTag("wait")
 end
 
-function ActionNode:setFalseReel(falseSymbols)
+function SpinColumn:setFalseReel(falseSymbols)
     self.falseSymbols = falseSymbols
 end
 
-function ActionNode:startReplaceTrueReel()
+function SpinColumn:startReplaceTrueReel()
     if not self.trueSymbols then return end
 
     self.startTrueReelIndex = 1
     self:clearRemainLongSymbol()
 end
 
-function ActionNode:getSymbolTag()
+function SpinColumn:getSymbolTag()
     if self.startTrueReelIndex > 0 and self.startTrueReelIndex <= #self.trueSymbols then
         local tag = self.trueSymbols[self.startTrueReelIndex]
         self.startTrueReelIndex = self.startTrueReelIndex + 1
@@ -636,7 +869,7 @@ function ActionNode:getSymbolTag()
     end
 end
 
-function ActionNode:reorderSymbol()
+function SpinColumn:reorderSymbol()
     for i, v in ipairs(self.nodes) do
         if v.node and not v.isHide then
             local symbol_set = self.theme:getItemById(v.symbol).symbol_set
@@ -645,7 +878,7 @@ function ActionNode:reorderSymbol()
     end
 end
 
-function ActionNode:reVisibleSymbol()
+function SpinColumn:reVisibleSymbol()
     for i, v in ipairs(self.nodes) do
         if v.node and not v.isHide then
             v.node:setVisible(true)
@@ -653,12 +886,13 @@ function ActionNode:reVisibleSymbol()
     end
 end
 
-function ActionNode:genSymbol(info)
+function SpinColumn:genSymbol(info)
+    info.colum = self.columnIndex
     local isNew = self.theme:getSymbolInfo(info)
     local sp = info.node
     if isNew then
         sp:setPositionX(self.bottomPosX)
-        self.spinColumn:getSymbolNode():addChild(sp)
+        self:getSymbolNode():addChild(sp)
     else
         if info.isHide then
             sp:setVisible(true)
@@ -668,142 +902,26 @@ function ActionNode:genSymbol(info)
     info.isHide = false
 end
 
-function ActionNode:runAction(actionQueue)
+function SpinColumn:runAction(actionQueue)
     self.actionQueue = actionQueue
     self.actionQueue:runWithTarget(self)
     self:run()
 end
 
-function ActionNode:setSpeed(speed)
+function SpinColumn:setSpeed(speed)
     self.speed = speed
 end
 
-function ActionNode:getSpeed()
+function SpinColumn:getSpeed()
     return self.speed
-end
-
-function ActionNode:run()
-    self.actionQueue:run()
-end
-
-function ActionNode:pause()
-    self.actionQueue:pause()
-end
-
-function ActionNode:resume()
-    self.actionQueue:resume()
-end
-
-function ActionNode:stop()
-    self.actionQueue:stopByTag("stop")
-end
-
-function ActionNode:stopByTag(tag)
-    self.actionQueue:stopByTag(tag)
-end
-
-function ActionNode:removeWinBonus()
-    self.actionQueue:stopByTag("winBonusAction")
-end
-
-function ActionNode:execByTag(tag)
-    self.actionQueue:execByTag(tag)
-end
-
-function ActionNode:isStoped()
-    return self.actionQueue:isStoped()
-end
-
-function ActionNode:isDone()
-    return self.actionQueue:isDone()
-end
-
-function ActionNode:addAction(action)
-    self.actionQueue:addAction(action, self)
-end
-
-
--- 线段
-local SpinLine = class("SpinLine")
-function SpinLine:ctor(pt1, pt2, color)
-    self.pt1 = pt1
-    self.pt2 = pt2
-    self.color = color
-end
-
-
-local SpinColumn = class("SpinColumn")
-function SpinColumn:ctor(columnIndex, spinView)
-    self.columnIndex = columnIndex
-    self.spinView = spinView
-
-    self.theme = spinView:getTheme()
-
-    self.actionNode = ActionNode:create(self, self.theme)
 end
 
 function SpinColumn:getSymbolNode()
     return self.spinView:getSymbolNode()
 end
 
-function SpinColumn:getSymbolSprite(row)
-    return self.actionNode:getNodeByReelRow(row)
-end
-
-function SpinColumn:getColumnIndex()
-    return self.columnIndex
-end
-
-function SpinColumn:drawRect(rect)
-    self.spinView:drawRect(rect)
-end
-
-function SpinColumn:update(dt)
-    if dt > 0.1 then
-        return
-    end
-
-    self.actionNode:update(dt)
-end
-
-function SpinColumn:isDone()
-    return self.actionNode:isDone()
-end
-
-function SpinColumn:isStoped()
-    return self.actionNode:isStoped()
-end
-
-function SpinColumn:start()
-end
-
-function SpinColumn:stop()
-    self.actionNode:stop()
-    self.actionNode:execByTag("stopAccelerate")
-end
-
-function SpinColumn:removeWinBonus()
-    self.actionNode:removeWinBonus()
-end
-
-function SpinColumn:execByTag(tag)
-    self.actionNode:execByTag(tag)
-end
-
-function SpinColumn:stopByTag(tag)
-    self.actionNode:stopByTag(tag)
-end
-
-function SpinColumn:pause()
-    self.actionNode:pause()
-end
-
-function SpinColumn:resume()
-    self.actionNode:resume()
-end
-
 function SpinColumn:setWinBonusAction()
-    self.actionNode:execByTag("winBonusAction")
+    self:execByTag("winBonusAction")
 end
 
 function SpinColumn:setTagEnabled(tag)
@@ -818,84 +936,6 @@ function SpinColumn:getTagEnabled(tag)
     return self[tag .. "Enabled"]
 end
 
-function SpinColumn:clear()
-    self.actionNode:clear()
-end
-
-function SpinColumn:spin(endCallback, stopAliveCallback)
-    self:clear()
-
-    -- 开始的延时时间
-    local matrix = self.theme:getMatrix()
-    local column = self.columnIndex
-    local startDelay = matrix.start_delay[column]
-    if startDelay > 0.01 then
-        local startDelayAction = SpinDelayAction:create(startDelay, true)
-        self.actionNode:addAction(startDelayAction)
-    end
-
-    -- 加速时间
-    local aTime = matrix.acceleration_time[column]
-    local speed = matrix.speed[column]
-    local addSpeedAction = SpinSpeedAction:create(aTime, speed / aTime)
-    self.actionNode:addAction(addSpeedAction)
-
-    -- 匀速的时间，滚轮必须转完的时间（转完此时间才有可能激活stop按钮）
-    local speedTime = matrix.uniform_time[column]
-    local speedAction = SpinSpeedAction:create(speedTime)
-    self.actionNode:addAction(speedAction)
-    speedAction:setEndCallback(stopAliveCallback)
-
-    -- 等待网络的时间
-    local waitNetAction = SpinWaitNetDataAction:create()
-    self.actionNode:addAction(waitNetAction)
-
-    -- 匀速时间用完，若此时已经得到真数据，继续转动的时间。另：这个时间可以被stop按钮打断（stop按钮可以打断这个时间）
-    local bounceTime = matrix.bounce_time[column]
-    local bounceAction = SpinSpeedAction:create(bounceTime)
-    self.actionNode:addAction(bounceAction)
-    bounceAction:setTagEnabled("stop")
-
-    -- 准备停止时的延时。另：这个时间可以被stop按钮打断（stop按钮可以打断这个时间）
-    local stopDelay = matrix.stop_delay[column]
-    if stopDelay > 0.01 then
-        local stopDelayAction = SpinDelayAction:create(stopDelay)
-        self.actionNode:addAction(stopDelayAction)
-        stopDelayAction:setTagEnabled("stop")
-    end
-
-    --最后一个得到bonus的列的加速停止动作
-    if self.theme:getBonusWin() then
-        local winBonusAction = SpinWinBonusAction:create(matrix.prompt_success_delay, matrix.prompt_success_speed)
-        self.actionNode:addAction(winBonusAction)
-        winBonusAction:setTagEnabled("stop")
-    end
-
-    -- 替换真滚轴
-    local trueReelAction = SpinTrueReelAction:create(matrix.forcibly_stop)
-    self.actionNode:addAction(trueReelAction)
-
-    -- 停止动作
-    local stopAction = SpinStopAction:create(matrix.forcibly_stop)
-    self.actionNode:addAction(stopAction)
-
-    -- 停止时的弹跳
-    local jumpMovie = matrix.spring_type
-    local jumpAction = SpinJumpAction:create(jumpMovie)
-    self.actionNode:addAction(jumpAction)
-    jumpAction:setEndCallback(endCallback)
-
-    self.actionNode:run()
-end
-
-function SpinColumn:setTrueReel(reel, falseReels)
-    self.actionNode:setTrueReel(reel, falseReels)
-end
-
-function SpinColumn:setFalseReel(reel)
-    self.actionNode:setFalseReel(reel)
-end
-
 function SpinColumn:getTrueReel()
     return self.theme:getDisplayReelByColumn(self.columnIndex)
 end
@@ -904,457 +944,299 @@ function SpinColumn:getFalseReel()
     return self.theme:getFalseReelByColumn(self.columnIndex)
 end
 
+function SpinColumn:spin(endCallback, stopAliveCallback)
+    self:clear()
 
-local WinEffectAnimation = class("WinEffectAnimation")
-function WinEffectAnimation:ctor(spinView)
-    print("WinEffectAnimation:ctor")
-    self.isStop = true
-    self.isFirst = true
-    self.spinView = spinView
+    -- 开始的延时时间
+    local matrix = self.theme:getMatrix()
+    local columnIndex = self.columnIndex
+    local startDelay = matrix.start_delay[columnIndex]
+    if startDelay > 0.01 then
+        local startDelayAction = SpinDelayAction:create(startDelay, true)
+        self:addAction(startDelayAction)
+        startDelayAction:setName("StartDelayAction")
+    end
 
-    self.theme = self.spinView:getTheme()
-    self.themeId = self.theme:getThemeId()
+    -- 加速时间
+    local aTime = matrix.acceleration_time[columnIndex]
+    local speed = matrix.speed[columnIndex]
+    local addSpeedAction = SpinSpeedAction:create(aTime, speed / aTime)
+    self:addAction(addSpeedAction)
+    addSpeedAction:setName("AccelarateAction")
 
-    self.rectLineNode = self.spinView:getRectLineNode()
-    self.pureLineNode = self.spinView:getPureLineNode()
+    -- 匀速的时间，滚轮必须转完的时间（转完此时间才有可能激活stop按钮）
+    local speedTime = matrix.uniform_time[columnIndex]
+    local speedAction = SpinSpeedAction:create(speedTime)
+    self:addAction(speedAction)
+    speedAction:setEndCallback(stopAliveCallback)
+    speedAction:setTagEnabled("questNetData")
+    speedAction:setName("SpeedAction")
 
-    self.fadeTime = 0.8
-    self.intervalTime = 2 * self.fadeTime
+    -- 等待网络的时间
+    local waitNetAction = SpinWaitNetDataAction:create()
+    self:addAction(waitNetAction)
+    waitNetAction:setName("WaitNetAction")
+
+    -- 匀速时间用完，若此时已经得到真数据，继续转动的时间。另：这个时间可以被stop按钮打断（stop按钮可以打断这个时间）
+    local bounceTime = matrix.bounce_time[columnIndex]
+    local bounceAction = SpinSpeedAction:create(bounceTime)
+    self:addAction(bounceAction)
+    bounceAction:setTagEnabled("stop")
+    bounceAction:setName("BounceAction")
+
+    -- 准备停止时的延时。另：这个时间可以被stop按钮打断（stop按钮可以打断这个时间）
+    local stopDelay = matrix.stop_delay[columnIndex]
+    if stopDelay > 0.01 then
+        local stopDelayAction = SpinDelayAction:create(stopDelay)
+        self:addAction(stopDelayAction)
+        stopDelayAction:setTagEnabled("stop")
+        stopDelayAction:setName("StopDelayAction")
+    end
+
+    --最后一个得到bonus的列的加速停止动作
+    if self.theme:getBonusWin() then
+        local winBonusAction = SpinWinBonusAction:create(matrix.prompt_success_delay, matrix.prompt_success_speed)
+        self:addAction(winBonusAction)
+        winBonusAction:setTagEnabled("stop")
+        winBonusAction:setName("PromptAction")
+    end
+
+    -- 替换真滚轴
+    local trueReelAction = SpinTrueReelAction:create(matrix.forcibly_stop)
+    self:addAction(trueReelAction)
+    trueReelAction:setName("SpinTrueReelAction")
+
+    -- 停止动作
+    local stopAction = SpinStopAction:create(matrix.forcibly_stop)
+    self:addAction(stopAction)
+    stopAction:setName("StopAction")
+
+    -- 停止时的弹跳
+    local jumpMovie = matrix.spring_type
+    local jumpAction = SpinJumpAction:create(jumpMovie)
+    self:addAction(jumpAction)
+    jumpAction:setEndCallback(endCallback)
+    self.firstMovieLen = jumpMovie[1]
+    jumpAction:setName("SpinJumpAction")
+
+    self:run()
 end
 
-function WinEffectAnimation:start(winData)
-    print("WinEffectAnimation:start")
-    self.isStop = false
-    self.winLineData = winData.line
-    self.isFreeSpin = winData.isFreeSpin
+function SpinColumn:run()
+    self.actionQueue:run()
 end
 
-function WinEffectAnimation:stop()
-    print("WinEffectAnimation:stop")
-    self.isStop = true
-    self.isFirst = true
-    self.rectLineNode:clear()
-    self.pureLineNode:clear()
+function SpinColumn:pause()
+    self.actionQueue:pause()
 end
 
-function WinEffectAnimation:init()
-    print("WinEffectAnimation:init")
-    self.useFirstRound = true
-    self.count = #self.winLineData
-
-    self.index = 0
-    self.needToChangeNextLine = false
-    self.elapsed = 0
-
-    self.cacheLineAnimation = {}
-    self.cacheLineInfo = {}
-    self.visibleNodes = {}
-
-    return self.count > 0
+function SpinColumn:resume()
+    self.actionQueue:resume()
 end
 
-function WinEffectAnimation:step(dt)
-    if self.isStop then
-        return
-    end
-
-    if self.isFirst then
-        print("WinEffectAnimation:step isFirst")
-        self.isFirst = false
-        if not self:init() then
-            self:stop()
-            self:firstRoundOver(0)
-            return
-        end
-    end
-
-    if self.count == 0 then
-        return
-    end
-
-    self.elapsed = self.elapsed + dt
-
-    if self.elapsed >= self.intervalTime then
-        print("self.elapsed >= self.intervalTime")
-        self.elapsed = self.elapsed - self.intervalTime
-        --        if self.isFreeSpin then
-        --            self:stop()
-        --            self:firstRoundOver(1)
-        --            return
-        --        end
-
-        if self.needToChangeNextLine then
-            if not self.isFreeSpin then
-                print("if not self.isFreeSpin")
-                self.needToChangeNextLine = false
-                self.elapsed = 0
-                self:next()
-            else
-                self:stop()
-                self:firstRoundOver(1)
-                return
-            end
-        elseif self.index == 0 then
-            self.needToChangeNextLine = true
-        end
-    end
-
-    self:hideLineNodes()
-    self:playLineNodes(self.index)
+function SpinColumn:stop()
+    self.actionQueue:stopByTag("stop")
+    self:execByTag("stopAccelerate")
 end
 
-function WinEffectAnimation:firstRoundOver(index)
-    print("WinEffectAnimation:firstRoundOver")
-    if self.useFirstRound then
-        self.useFirstRound = false
---        self.theme:playWinLineEnd(index)
-        bole:postEvent("winLineEnd")
-    end
+function SpinColumn:stopByTag(tag)
+    self.actionQueue:stopByTag(tag)
 end
 
-function WinEffectAnimation:next()
-    print("WinEffectAnimation:next")
-    if self.isFreeSpin then return end
-
-    self.index = self.index + 1
-    if self.index > self.count then
-        self.index = 0
-        self:firstRoundOver(2)
-    end
-
-    self:playAnimationNodes(self.index)
+function SpinColumn:removeWinBonus()
+    self.actionQueue:stopByTag("winBonusAction")
 end
 
-function WinEffectAnimation:hideLineNodes(index)
-    self.rectLineNode:clear()
-    self.pureLineNode:clear()
+function SpinColumn:execByTag(tag)
+    self.actionQueue:execByTag(tag)
 end
 
-function WinEffectAnimation:lineAnimationPlayOver()
-    print("WinEffectAnimation:lineAnimationPlayOver")
-    self.needToChangeNextLine = true
+function SpinColumn:isStoped()
+    return self.actionQueue:isStoped()
 end
 
-function WinEffectAnimation:playLineEffect(index)
-    print("WinEffectAnimation:playLineEffect")
-    local info = self.winLineData[index]
-    bole:postEvent("audio_link", info.link)
+function SpinColumn:isDone()
+    return self.actionQueue:isDone()
 end
 
-function WinEffectAnimation:playAnimationNodes(index)
-    print("WinEffectAnimation:playLineEffect")
-    for _, info in ipairs(self.visibleNodes) do
-        local skNode = info[1]
-        if skNode.useTag then
-            skNode:setVisible(false)
-            skNode.useTag = nil
-        end
-        local sp = info[2]
-        if sp then
-            sp:setVisible(true)
-        end
-    end
-    self.visibleNodes = {}
-
-    if index == 0 then return end
-
-    if not self.cacheLineAnimation[index] then
-        self.cacheLineAnimation[index] = true
-        self:playLineEffect(index)
-    end
-
-    local info = self.winLineData[index].icons
-    local needToPlayCount = #info
-    
-    for _, item in ipairs(info) do
-        local function endCallback(skNode, sp)
-            skNode:setVisible(true)
-            if sp then
-                sp:setVisible(false)
-            end
-            needToPlayCount = needToPlayCount - 1
-            if needToPlayCount == 0 then
-                self:lineAnimationPlayOver()
-            end
-        end
-
-        local skNode, sp = self.theme:createAnimNode(item[1], item[2], "trigger", false, true, endCallback)
-        skNode.useTag = true
-        table.insert(self.visibleNodes, {skNode, sp})
-    end
-end
-
-function WinEffectAnimation:playLineNodes(index)
-    local rate = self.elapsed / self.fadeTime
-    if rate > 1 then
-        rate = 2 - rate
-    end
-
-    local info = self:getInfoItemByIndex(index)
-    local node
-    if index == 0 then
-        node = self.pureLineNode
-    else
-        node = self.rectLineNode
-    end
-    self:drawLine(node, info, rate)
-end
-
-local _fillColor = { 0, 0, 0, 0 }
-function WinEffectAnimation:drawLine(node, infoItem, opacityRate)
-    local lines = infoItem.lines
-    if lines then
-        for _, line in ipairs(lines) do
-            local color = clone(line.color)
-            color.a = color.a * opacityRate
-            node:drawSegment(line.pt1, line.pt2, 2, color)
-        end
-    end
-
-    local rects = infoItem.rects
-    if rects then
-        for _, rect in ipairs(rects) do
-            local color = clone(rect.color)
-            color.a = color.a * opacityRate
-            node:drawPolygon(rect.vec2s, 4, _fillColor, 2, color)
-        end
-    end
-end
-
-function WinEffectAnimation:getInfoItemByIndex(index)
-    local infoItem = self.cacheLineInfo[index]
-    if not infoItem then
-        infoItem = {}
-
-        if index == 0 then
-            -- 只画交叉的线
-            infoItem.lines = {}
-            for _, line in ipairs(self.winLineData) do
-                local lineConfig = self.theme:getLineById(line.line_id)
-                local color = cc.convertColor(lineConfig.line_color[3], "4f")
-                for i = 1, #lineConfig.line_turnning - 1 do
-                    local pt1 = lineConfig.line_turnning[i]
-                    local pt2 = lineConfig.line_turnning[i + 1]
-                    local line = SpinLine:create(pt1, pt2, color)
-                    table.insert(infoItem.lines, line)
-                end
-            end
-        else
-            infoItem.rects = {}
-            local lineConfig = self.theme:getLineById(self.winLineData[index].line_id)
-            local color = cc.convertColor(lineConfig.line_color[3], "4f")
-
-            local rects = {}
-            for _, posItem in ipairs(self.winLineData[index].icons) do
-                local rect = self.spinView:getRectByPos(posItem[1], posItem[2])
-                table.insert(rects, rect)
-            end
-
-            local lines = self.spinView:getLines(lineConfig.line_turnning, rects)
-            for _, line in ipairs(lines) do
-                line.color = color
-            end
-            infoItem.lines = lines
-
-            for _, rect in ipairs(rects) do
-                local pt1 = cc.p(rect.x + 2, rect.y + 2)
-                local pt2 = cc.p(rect.x + rect.width - 2, rect.y + rect.height - 2)
-
-                local pLB = cc.p(pt1.x, pt1.y)
-                local pRB = cc.p(pt2.x, pt1.y)
-                local pRT = cc.p(pt2.x, pt2.y)
-                local pLT = cc.p(pt1.x, pt2.y)
-
-                local info = {}
-                info.vec2s = { pLB, pRB, pRT, pLT }
-                info.color = color
-                table.insert(infoItem.rects, info)
-            end
-        end
-
-        self.cacheLineInfo[index] = infoItem
-    end
-    return infoItem
+function SpinColumn:addAction(action)
+    self.actionQueue:addAction(action, self)
 end
 
 
 local MiniGameAnimation = class("MiniGameAnimation")
-function MiniGameAnimation:ctor(spinView)
-    self.isStop = true
-    self.isFirst = true
-    self.spinView = spinView
+function MiniGameAnimation:ctor(theme)
+    self.theme = theme
+    self.cacheLineAnimNodes = {}
+    self.checkFilePos = 0
 
-    self.theme = self.spinView:getTheme()
-    self.themeId = self.theme:getThemeId()
-
-    self.rectLineNode = self.spinView:getRectLineNode()
-
-    self.fadeTime = 0.8
-    self.intervalTime = 2 * self.fadeTime
+    self.jsonName, self.atlasName = theme:getSpinApp():getSymbolAnim(theme:getThemeId(), "kuang")
 end
 
-function MiniGameAnimation:start(winData)
-    self.isStop = false
-    self.winLineData = winData
-end
+function MiniGameAnimation:firstRoundOver()
+    if self.isCallingBack then return end
 
-function MiniGameAnimation:stop()
-    self.isStop = true
-    self.isFirst = true
-    self.rectLineNode:clear()
-end
-
-function MiniGameAnimation:init()
-    self.count = #self.winLineData
-    if self.count == 0 then
-        return false
-    end
-
-    self.index = 1  -- 进入之后，直接触发动画
-    self.elapsed = 0
-    self.needToChangeNextLine = false
-
-    self.cacheLineInfo = {}
-    return true
-end
-
-function MiniGameAnimation:step(dt)
-    if self.isStop then
-        return
-    end
-
-    if self.isFirst then
-        self.isFirst = false
-        if not self:init() then
-            self:stop()
-            self:firstRoundOver(0)
-            return
-        end
-
-        self:playAnimationNodes(1)
-    end
-
-    if self.count == 0 then
-        return
-    end
-
-    self.elapsed = self.elapsed + dt
-
-    if self.elapsed >= self.intervalTime then
-        self.elapsed = self.elapsed - self.intervalTime
-
-        if self.needToChangeNextLine then
-            self.needToChangeNextLine = false
-            self.elapsed = 0
-            self:stop()
-            self:firstRoundOver(0)
-            return
-        end
-    end
-
-    self:hideLineNodes()
-    self:playLineNodes(self.index)
-end
-
-function MiniGameAnimation:firstRoundOver(index)
+    self.isCallingBack = true
     bole:postEvent("miniEffectEnd")
 end
 
-function MiniGameAnimation:hideLineNodes()
-    self.rectLineNode:clear()
+function MiniGameAnimation:start(lines)
+    self.isCallingBack = false
+
+    self.index = 0
+    self.lines = lines[1]
+    self.isFreeSpining = lines[2]
+    self:playAnimationNodes(lines)
 end
 
-function MiniGameAnimation:lineAnimationPlayOver()
-    self.needToChangeNextLine = true
+function MiniGameAnimation:stop()
+    self:hideLine()
+    self.index = 0
+    self.theme:removeWaitEventByName("spinViewRealPlayNext")
 end
 
-function MiniGameAnimation:playAnimationNodes(index)
-    local info = self.winLineData[index].icons
-    local needToPlayCount = #info
-    for _, item in ipairs(info) do
-        local function endCallback()
-            needToPlayCount = needToPlayCount - 1
-            if needToPlayCount == 0 then
-                self:lineAnimationPlayOver()
+function MiniGameAnimation:hideLine()
+    for _, node in ipairs(self.cacheLineAnimNodes) do
+        node:setVisible(false)
+    end
+end
+
+function MiniGameAnimation:addLineIndex()
+    self.index = self.index + 1
+    if self.index > #self.lines then
+        self.index = 1
+    end
+
+    if self.lines[self.index].feature ~= 0 then
+        self:addLineIndex()
+    end
+end
+
+function MiniGameAnimation:removeCacheNodes()
+    self.cacheLineAnimNodes = {}
+end
+
+function MiniGameAnimation:getEffAnimNode(pos, parentNode, loop, callback)
+    local node
+    for _, v in ipairs(self.cacheLineAnimNodes) do
+        if not v:isVisible() then
+            node = v
+            break
+        end
+    end
+
+    if not node then
+        node = sp.SkeletonAnimation:create(self.jsonName, self.atlasName)
+        parentNode:addChild(node, 100)
+        table.insert(self.cacheLineAnimNodes, node)
+    else
+        local oldParentNode = node:getParent()
+        if oldParentNode ~= parentNode then
+            node:retain()
+            node:removeFromParent()
+            parentNode:addChild(node, 100)
+            node:release()
+        end
+        node:setVisible(true)
+        node:setToSetupPose()
+    end
+
+    node:registerSpineEventHandler(function(event)
+        if callback then
+            callback()
+        end
+    end, sp.EventType.ANIMATION_COMPLETE)
+
+    node:setPosition(pos.x, pos.y)
+    node:setAnimation(0, "animation", loop)
+    return node
+end
+
+function MiniGameAnimation:startPlayLine()
+    if self.isFreeSpining or self.index == 0 then return end
+
+    local line = self.lines[self.index]
+
+    local callback
+    if self.winLineCount > 1 then
+        self:addLineIndex()
+
+        local function realPlayNext()
+            self:startPlayLine()
+        end
+        callback = function()
+            self:hideLine()
+            self.theme:addWaitEvent("spinViewRealPlayNext", 0.1, realPlayNext)
+        end
+    end
+
+    for _, item in ipairs(line.icons) do
+        self:getEffAnimNode(item[3], item[4], self.winLineCount == 1, callback)
+        callback = nil
+    end
+end
+
+function MiniGameAnimation:playAnimationNodes(info)
+    local lines = info[1]
+    local isFreeSpining = info[2]
+
+    local lineIndex = 0
+    local recordSetIndexs = {}
+    for k, line in ipairs(lines) do
+        if line.feature > 0 then
+            local endCallback = function()
+                self:firstRoundOver()
+            end
+            for _, item in ipairs(line.icons) do
+                local node, sp = self.theme:createAnimNode(item[1], item[2], "trigger", false, true, false, endCallback)
+                endCallback = nil
+
+                local keyIndex = item[1]*10 + item[2]
+                if not recordSetIndexs[keyIndex] then
+                    local pos = cc.p(sp:getPosition())
+                    local parentNode = node:getParent()
+                    recordSetIndexs[keyIndex] = {pos, parentNode}
+                end
+            end
+        else
+            lineIndex = lineIndex + 1
+            if lineIndex == 1 then
+                if self.index == 0 then
+                    self.index = k
+                end
+            end
+
+            for _, item in ipairs(line.icons) do
+                local keyIndex = item[1]*10 + item[2]
+                local itemValue = recordSetIndexs[keyIndex]
+                if not itemValue then
+                    local node, sp = self.theme:createAnimNode(item[1], item[2], "trigger", true, true, false)
+
+                    local pos = cc.p(sp:getPosition())
+                    local parentNode = node:getParent()
+
+                    if isFreeSpining then
+                        self:getEffAnimNode(pos, parentNode, true)
+                    end
+
+                    itemValue = {pos, parentNode}
+                    recordSetIndexs[keyIndex] = itemValue
+                end
+
+                if not isFreeSpining then
+                    item[3] = itemValue[1]
+                    item[4] = itemValue[2]
+                end
             end
         end
-
-        self.theme:createAnimNode(item[1], item[2], "trigger", false, true, endCallback)
     end
+    self.winLineCount = lineIndex
+    self:startPlayLine()
 end
-
-function MiniGameAnimation:playLineNodes(index)
-    local rate = self.elapsed / self.fadeTime
-    if rate > 1 then
-        rate = 2 - rate
-    end
-
-    local info = self:getInfoItemByIndex(index)
-    local node = self.rectLineNode
-    self:drawLine(node, info, rate)
-end
-
-local _fillColor = { 0, 0, 0, 0 }
-function MiniGameAnimation:drawLine(node, infoItem, opacityRate)
-    local lines = infoItem.lines
-    if lines then
-        for _, line in ipairs(lines) do
-            local color = clone(line.color)
-            color.a = color.a * opacityRate
-            node:drawSegment(line.pt1, line.pt2, 2, color)
-        end
-    end
-
-    local rects = infoItem.rects
-    if rects then
-        for _, rect in ipairs(rects) do
-            local color = clone(rect.color)
-            color.a = color.a * opacityRate
-            node:drawPolygon(rect.vec2s, 4, _fillColor, 2, color)
-        end
-    end
-end
-
-function MiniGameAnimation:getInfoItemByIndex(index)
-    local infoItem = self.cacheLineInfo[index]
-    if not infoItem then
-        infoItem = {}
-
-        if index > 0 then -- 只画矩形
-            infoItem.rects = {}
-            local color = cc.convertColor(cc.c4b(255, 255, 0, 255), "4f")
-
-            local rects = {}
-            for _, posItem in ipairs(self.winLineData[index].icons) do
-                local rect = self.spinView:getRectByPos(posItem[1], posItem[2])
-                table.insert(rects, rect)
-            end
-
-            for _, rect in ipairs(rects) do
-                local pt1 = cc.p(rect.x + 2, rect.y + 2)
-                local pt2 = cc.p(rect.x + rect.width - 2, rect.y + rect.height - 2)
-
-                local pLB = cc.p(pt1.x, pt1.y)
-                local pRB = cc.p(pt2.x, pt1.y)
-                local pRT = cc.p(pt2.x, pt2.y)
-                local pLT = cc.p(pt1.x, pt2.y)
-
-                local info = {}
-                info.vec2s = { pLB, pRB, pRT, pLT }
-                info.color = color
-                table.insert(infoItem.rects, info)
-            end
-        end
-
-        self.cacheLineInfo[index] = infoItem
-    end
-    return infoItem
-end
-
 
 local SPINORDER = {
-    PROMPT = 10,
     SYMBOL = 15,
+    PROMPT = 18,
     WINRECT = 20,
     SYMBOL_ANIM = 25,
     WINLINE = 30
@@ -1370,67 +1252,74 @@ function SpinView:ctor(theme)
 
     -- 行列数
     local matrix = theme:getMatrix()
-    self.column = #matrix.array
+    self.columnCount = #matrix.array
     self.rowHeight = matrix.cell_size[2]
 
     -- 创建节点层级
     self:createNodes()
-    self.winLineEffect = WinEffectAnimation:create(self) -- 创建连线的动画效果器
-    self.miniEffect = MiniGameAnimation:create(self) -- freespin和minigame的效果
+    self.miniEffect = MiniGameAnimation:create(theme) -- freespin和minigame的效果
     self:createColumns()
 
     self:enableNodeEvents() -- 激活事件(enter, exit, cleanup等)
 
-    self:onChangeWinBonus()
+    self.frameIntervalTime = cc.Director:getInstance():getAnimationInterval()
+end
+
+function SpinView:getFrameInterval()
+    return self.frameIntervalTime
 end
 
 function SpinView:onEnter()
-    self.isDead = false
+    local openCalDt = true
+    local sumTime  = 0
+    local recordTimes = 0
     local function update(dt)
+        if dt > 0.05 then
+            dt = self.frameIntervalTime
+        end
+
+        if openCalDt then
+            sumTime = sumTime + dt
+            recordTimes = recordTimes + 1
+
+            dt = sumTime/recordTimes
+            self.frameIntervalTime = dt
+
+            if recordTimes > 10000 then
+                openCalDt = false
+            end
+        else
+            dt = self.frameIntervalTime
+        end
+
         for _, column in ipairs(self.spinColumns) do
             column:update(dt)
         end
-
-        self.winLineEffect:step(dt)
-        self.miniEffect:step(dt)
     end
     self:onUpdate(update)
 
---    bole:addListener("spin", self.spin, self, nil, true)
     bole:addListener("stop", self.stop, self, nil, true)
-    bole:addListener("trueReelsResponse", self.onTrueReelsResponse, self, nil, true)  --得到真数据
-    bole:addListener("drawLine", self.playLineAnim, self, nil, true)
     bole:addListener("miniEffect", self.playMiniAnim, self, nil, true)
     bole:addListener("columnStop", self.onColumnStop, self, nil, true)
+    bole:addListener("columnStopCalm", self.onColumnStopCalm, self, nil, true)
 end
 
 function SpinView:onExit()
-    self.isDead = true
-
---    bole:getEventCenter():removeEventWithTarget("spin", self)
     bole:getEventCenter():removeEventWithTarget("stop", self)
-    bole:getEventCenter():removeEventWithTarget("trueReelsResponse", self)
-    bole:getEventCenter():removeEventWithTarget("drawLine", self)
     bole:getEventCenter():removeEventWithTarget("miniEffect", self)
     bole:getEventCenter():removeEventWithTarget("columnStop", self)
-    bole:getEventCenter():removeEventWithTarget("promptSuccess", self)
+    bole:getEventCenter():removeEventWithTarget("columnStopCalm", self)
 end
 
 function SpinView:createNodes()
-    self.promptSuccessNode = cc.Node:create()
-    self:addChild(self.promptSuccessNode, SPINORDER.PROMPT)
-
     self.symbolNode = cc.Node:create()
     self:addChild(self.symbolNode, SPINORDER.SYMBOL)
 
-    self.pureLineNode = cc.DrawNode:create()
-    self:addChild(self.pureLineNode, SPINORDER.WINRECT)
+    self.promptSuccessNode = cc.Node:create()
+    self:addChild(self.promptSuccessNode, SPINORDER.PROMPT)
 
     self.animNode = cc.Node:create()
     self:addChild(self.animNode, SPINORDER.SYMBOL_ANIM)
-
-    self.rectLineNode = cc.DrawNode:create()
-    self:addChild(self.rectLineNode, SPINORDER.WINLINE)
 end
 
 function SpinView:getClippingAnimNode()
@@ -1443,33 +1332,52 @@ function SpinView:createOneNode(order)
     return fixedNode
 end
 
-function SpinView:getRectLineNode()
-    return self.rectLineNode
-end
-
-function SpinView:getPureLineNode()
-    return self.pureLineNode
+function SpinView:addMoveNode(node, sp, column)
+    self.spinColumns[column]:addMoveNode(node, sp)
 end
 
 function SpinView:getAnimationNode()
     return self.theme:getAnimLayer()
 end
 
+function SpinView:removeCacheNodes()
+    self.miniEffect:removeCacheNodes()
+end
+
+function SpinView:setAllSymbolVisible(flag)
+    for _, column in ipairs(self.spinColumns) do
+        column:setVisible(flag)
+    end
+end
+
 function SpinView:clearLineNode()
-    self.winLineEffect:stop()
     self.miniEffect:stop()
 end
 
 function SpinView:createColumns()
     self.spinColumns = {}
-    for i = 1, self.column do
-        local spinColumn = SpinColumn:create(i, self)
+    for i = 1, self.columnCount do
+        local spinColumn = SpinColumn:create(i, self, self.theme)
         table.insert(self.spinColumns, spinColumn)
     end
 end
 
+function SpinView:printLog()
+    if testFrames then
+        for _, column in ipairs(self.spinColumns) do
+            column:printLog()
+        end
+    end
+end
+
+function SpinView:setTrueReels(trueReels, falseReels)
+    for index, column in ipairs(self.spinColumns) do
+        column:setTrueReel(trueReels[index], falseReels[index])
+    end
+end
+
 function SpinView:stopEnabledEvent()
-    bole:postEvent("spinStatus", "stopEnabled")
+    self.theme:onStopEnabled()
 end
 
 function SpinView:reelStoped()
@@ -1478,9 +1386,10 @@ end
 
 function SpinView:spin(ignoreColumns)
     self:clearLineNode()
+    self:onChangeWinBonus()
 
-    local lastColumnIndex = self.column
-    for i = self.column, 1, -1 do
+    local lastColumnIndex = self.columnCount
+    for i = self.columnCount, 1, -1 do
         if not ignoreColumns or not ignoreColumns[i] then
             lastColumnIndex = i
             break
@@ -1489,7 +1398,13 @@ function SpinView:spin(ignoreColumns)
 
     for k, column in ipairs(self.spinColumns) do
         if k == lastColumnIndex then
-            column:spin(self.reelStoped, self.stopEnabledEvent)
+            local function reelStoped()
+                self:reelStoped()
+            end
+            local function stopBtnEnabled()
+                self:stopEnabledEvent()
+            end
+            column:spin(reelStoped, stopBtnEnabled)
         else
             if ignoreColumns and ignoreColumns[k] then
                 column:clear()
@@ -1510,8 +1425,14 @@ function SpinView:stopColumn(column)
     self.spinColumns[column]:stop()
 end
 
-function SpinView:playLineAnim(event)
-    self.winLineEffect:start(event.result)
+function SpinView:execByTag(tag, columnIndex)
+    if columnIndex then
+        self.spinColumns[columnIndex]:execByTag(tag)
+    else
+        for _, column in ipairs(self.spinColumns) do
+            column:execByTag(tag)
+        end
+    end
 end
 
 function SpinView:playMiniAnim(event)
@@ -1522,166 +1443,8 @@ function SpinView:getSymbolSpriteByPos(column, row)
     return self.spinColumns[column]:getSymbolSprite(row)
 end
 
-function SpinView:onChangeWinBonus(num)
-    for _, column in ipairs(self.spinColumns) do
-        column:setTagDisabled("winBonus")
-    end
-
-    local reels = self.theme:getBonusWin()
-    if not reels then
-        return
-    end
-
-    if num then
-        for index = 1, num-1 do
-            self.spinColumns[index]:setTagEnabled("winBonus")
-        end
-    else
-        for _, item in ipairs(reels) do
-            for index, max in ipairs(item.reel_max) do
-                if max > 0 then
-                    self.spinColumns[index]:setTagEnabled("winBonus")
-                end
-            end
-        end
-    end
-end
-
-function SpinView:onColumnStop(event)
-    local column = event.result
-    self.theme:onColumnStop(column)
-end
-
-function SpinView:onTriggerColumnPrompt(index)
-    if index >= self.column then return end
-
-    local column = self.spinColumns[index + 1]
-    if column:getTagEnabled("winBonus") then
-        column:setWinBonusAction()
-    else
-        column:removeWinBonus()
-    end
-end
-
-function SpinView:onStopWinBonusAction(minWinBonusColumn)
-    for i = 1, minWinBonusColumn do
-        self.spinColumns[i]:removeWinBonus()
-    end
-end
-
-function SpinView:onTrueReelsResponse(event)
-    local result = event.result
-    self:setTrueReels(result.displayReels, result.falseReels)
-end
-
-function SpinView:setTrueReels(trueReels, falseReels)
-    for index, column in ipairs(self.spinColumns) do
-        column:setTrueReel(trueReels[index], falseReels[index])
-    end
-end
-
-function SpinView:getColumnCount()
-    return self.column
-end
-
-function SpinView:getLines(points, rects)
-    local lines = {}
-    for i = 1, #points - 1 do
-        local pt1 = points[i]
-        local pt2 = points[i + 1]
-        for j = 1, #rects do
-            if pt1.x == pt2.x and pt1.y == pt2.y then
-                break
-            end
-
-            local rect = rects[j]
-            if pt2.x < rect.x then
-                break
-            end
-
-            local intersectionPoint, nextStartPoint = self:getIntersectPoint(pt1, pt2, rect)
-            if intersectionPoint then
-                local line = SpinLine:create(pt1, intersectionPoint)
-                table.insert(lines, line)
-            end
-            
-            pt1 = nextStartPoint
-
-            if not pt1 then
-                break
-            end
-        end
-
-        if pt1 and (pt1.x ~= pt2.x or pt1.y ~= pt2.y) then
-            local line = SpinLine:create(pt1, pt2)
-            table.insert(lines, line)
-        end
-    end
-
-    return lines
-end
-
-function SpinView:getIntersectPoint(pointA, pointB, rect)
-    local LB_point = cc.p(rect.x, rect.y)
-    local LT_point = cc.p(rect.x, rect.y + rect.height)
-    local RT_point = cc.p(rect.x + rect.width, rect.y + rect.height)
-    local RB_point = cc.p(rect.x + rect.width, rect.y)
-
-    local resultPoints = {}
-
-    local flag = cc.pIsSegmentIntersect(pointA, pointB, LB_point, LT_point)
-    if flag then
-        local point = cc.pGetIntersectPoint(pointA, pointB, LB_point, LT_point)
-        table.insert(resultPoints, point)
-    end
-
-    flag = cc.pIsSegmentIntersect(pointA, pointB, LT_point, RT_point)
-    if flag then
-        local point = cc.pGetIntersectPoint(pointA, pointB, LT_point, RT_point)
-        table.insert(resultPoints, point)
-    end
-
-    flag = cc.pIsSegmentIntersect(pointA, pointB, LB_point, RB_point)
-    if flag then
-        local point = cc.pGetIntersectPoint(pointA, pointB, LB_point, RB_point)
-        table.insert(resultPoints, point)
-    end
-
-    flag = cc.pIsSegmentIntersect(pointA, pointB, RB_point, RT_point)
-    if flag then
-        local point = cc.pGetIntersectPoint(pointA, pointB, RB_point, RT_point)
-        table.insert(resultPoints, point)
-    end
-
-    local len = #resultPoints
-    if len == 0 then
-        if cc.rectContainsPoint(rect, pointB) then
-            -- 处理两个点都在rect的情况
-            pointA = nil
-        end
-        return nil, pointA
-    elseif len == 1 then
-        if cc.rectContainsPoint(rect, pointA) then
-            if cc.rectContainsPoint(rect, pointB) and pointB.x > resultPoints[1].x then
-                return nil, nil
-            else
-                return nil, resultPoints[1]
-            end
-        else
-            return resultPoints[1], pointB
-        end
-    else
-        local intersectionPoint, nextStartPoint
-        if resultPoints[1].x < resultPoints[2].x then
-            intersectionPoint = resultPoints[1]
-            nextStartPoint = resultPoints[2]
-        else
-            intersectionPoint = resultPoints[2]
-            nextStartPoint = resultPoints[1]
-        end
-
-        return intersectionPoint, nextStartPoint
-    end
+function SpinView:getNodeInfoByPos(column, row)
+    return self.spinColumns[column]:getNodeInfo(row)
 end
 
 function SpinView:getPositionByPos(column, row, isCenter)
@@ -1705,6 +1468,62 @@ function SpinView:getRectByPos(column, row)
     return rect
 end
 
+function SpinView:onChangeWinBonus()
+    for _, column in ipairs(self.spinColumns) do
+        column:setTagDisabled("winBonus")
+    end
+
+    local reels = self.theme:getBonusWin()
+    if not reels then
+        return
+    end
+
+    for _, item in ipairs(reels) do
+        for index, max in ipairs(item.reel_max) do
+            if max > 0 then
+                self.spinColumns[index]:setTagEnabled("winBonus")
+            end
+        end
+    end
+end
+
+function SpinView:onColumnStop(event)
+    local result = event.result
+    self.theme:onColumnStop(result[1], result[2])
+end
+
+function SpinView:onColumnStopCalm(event)
+    local column = event.result
+    self.theme:onColumnStopCalm(column)
+end
+
+function SpinView:onTriggerColumnPrompt(index)
+    if index >= self.columnCount then return end
+
+    local column = self.spinColumns[index + 1]
+    if column:getTagEnabled("winBonus") then
+        column:setWinBonusAction()
+    else
+        column:removeWinBonus()
+    end
+end
+
+function SpinView:onStopWinBonusAction(minWinBonusColumn, maxWinBonusColumn)
+    for i = 1, minWinBonusColumn do
+        self.spinColumns[i]:removeWinBonus()
+    end
+
+    if maxWinBonusColumn and maxWinBonusColumn > minWinBonusColumn then
+        for i = maxWinBonusColumn+1, self.columnCount do
+            self.spinColumns[i]:setTagDisabled("winBonus")
+        end
+    end
+end
+
+function SpinView:getColumnCount()
+    return self.columnCount
+end
+
 function SpinView:getSpinApp()
     return self.app
 end
@@ -1718,3 +1537,113 @@ function SpinView:getSymbolNode()
 end
 
 return SpinView
+
+
+-- 线段
+--local SpinLine = class("SpinLine")
+--function SpinLine:ctor(pt1, pt2, color)
+--    self.pt1 = pt1
+--    self.pt2 = pt2
+--    self.color = color
+--end
+
+
+--function SpinView:getLines(points, rects)
+--    local lines = {}
+--    for i = 1, #points - 1 do
+--        local pt1 = points[i]
+--        local pt2 = points[i + 1]
+--        for j = 1, #rects do
+--            if pt1.x == pt2.x and pt1.y == pt2.y then
+--                break
+--            end
+
+--            local rect = rects[j]
+--            if pt2.x < rect.x then
+--                break
+--            end
+
+--            local intersectionPoint, nextStartPoint = self:getIntersectPoint(pt1, pt2, rect)
+--            if intersectionPoint then
+--                local line = SpinLine:create(pt1, intersectionPoint)
+--                table.insert(lines, line)
+--            end
+
+--            pt1 = nextStartPoint
+
+--            if not pt1 then
+--                break
+--            end
+--        end
+
+--        if pt1 and (pt1.x ~= pt2.x or pt1.y ~= pt2.y) then
+--            local line = SpinLine:create(pt1, pt2)
+--            table.insert(lines, line)
+--        end
+--    end
+
+--    return lines
+--end
+
+--function SpinView:getIntersectPoint(pointA, pointB, rect)
+--    local LB_point = cc.p(rect.x, rect.y)
+--    local LT_point = cc.p(rect.x, rect.y + rect.height)
+--    local RT_point = cc.p(rect.x + rect.width, rect.y + rect.height)
+--    local RB_point = cc.p(rect.x + rect.width, rect.y)
+
+--    local resultPoints = {}
+
+--    local flag = cc.pIsSegmentIntersect(pointA, pointB, LB_point, LT_point)
+--    if flag then
+--        local point = cc.pGetIntersectPoint(pointA, pointB, LB_point, LT_point)
+--        table.insert(resultPoints, point)
+--    end
+
+--    flag = cc.pIsSegmentIntersect(pointA, pointB, LT_point, RT_point)
+--    if flag then
+--        local point = cc.pGetIntersectPoint(pointA, pointB, LT_point, RT_point)
+--        table.insert(resultPoints, point)
+--    end
+
+--    flag = cc.pIsSegmentIntersect(pointA, pointB, LB_point, RB_point)
+--    if flag then
+--        local point = cc.pGetIntersectPoint(pointA, pointB, LB_point, RB_point)
+--        table.insert(resultPoints, point)
+--    end
+
+--    flag = cc.pIsSegmentIntersect(pointA, pointB, RB_point, RT_point)
+--    if flag then
+--        local point = cc.pGetIntersectPoint(pointA, pointB, RB_point, RT_point)
+--        table.insert(resultPoints, point)
+--    end
+
+--    local len = #resultPoints
+--    if len == 0 then
+--        if cc.rectContainsPoint(rect, pointB) then
+--            -- 处理两个点都在rect的情况
+--            pointA = nil
+--        end
+--        return nil, pointA
+--    elseif len == 1 then
+--        if cc.rectContainsPoint(rect, pointA) then
+--            if cc.rectContainsPoint(rect, pointB) and pointB.x > resultPoints[1].x then
+--                return nil, nil
+--            else
+--                return nil, resultPoints[1]
+--            end
+--        else
+--            return resultPoints[1], pointB
+--        end
+--    else
+--        local intersectionPoint, nextStartPoint
+--        if resultPoints[1].x < resultPoints[2].x then
+--            intersectionPoint = resultPoints[1]
+--            nextStartPoint = resultPoints[2]
+--        else
+--            intersectionPoint = resultPoints[2]
+--            nextStartPoint = resultPoints[1]
+--        end
+
+--        return intersectionPoint, nextStartPoint
+--    end
+--end

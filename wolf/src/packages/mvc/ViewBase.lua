@@ -1,26 +1,22 @@
 
 local ViewBase = class("ViewBase", cc.Node)
 
-function ViewBase:ctor(name, ...)
+function ViewBase:ctor(name,data,path)
     self:enableNodeEvents()
     self:init()
-
-    if type(name) == "table" then
-        self.name_ = name.name
-        self:createResoueceNode(name.path .. "/" .. name.name .. ".csb")
-    else
-        self.name_ = name
-        self:createResoueceNode("csb/" .. name .. ".csb")
-    end
+    self.name_ = name
+    self:createResoueceNode(path .. "/" .. name .. ".csb")
     self:toWait(false)
+    -- 等待网络请求
     self:setTouch(true)
-    self.wait_time = 0
+    -- 按钮是否可用
+    self.wait_time = -1
     schedule(self, self.updateWaitTime, 0.1)
     print("--------ViewBase:ctor" .. self.name_)
-    if self.onCreate then self:onCreate(...) end
+    if self.onCreate then self:onCreate(data) end
     bole:addListener(self.name_, self.baseUpdateUI, self, nil, true)
-    
 end
+
 function ViewBase:init()
     self:registerScriptHandler( function(tag)
         if "enter" == tag then
@@ -36,9 +32,11 @@ end
 function ViewBase:onBaseEnter()
     -- 这里太慢
     -- bole:addListener(self.name_, self.baseUpdateUI, self, nil, true)
+    bole:getBoleEventKey():addKeyBack(self)
     if self.onEnter then self:onEnter() end
 end
 function ViewBase:onBaseExit()
+    bole:getBoleEventKey():removeKeyBack(self)
     bole:getEventCenter():removeEventWithTarget(self.name_, self)
     if self.onExit then self:onExit() end
 end
@@ -50,6 +48,7 @@ function ViewBase:updateWaitTime()
     if self.wait_time <= 0 then
         self.wait_time = -1
         self:toWait(false)
+        bole:popMsg({msg ="The network connection failed Please log in again" , title = "re-register" , cancle = true}, function() bole:getAppManage():connectScoket() return end)
         return
     end
     self.wait_time = self.wait_time - 0.1
@@ -69,10 +68,11 @@ end
 function ViewBase:updateUI(data)
 end
 function ViewBase:closeUI()
+    self:clearMask()
     bole:autoOpacityC(self)
     local ac1 = cc.FadeOut:create(0.2)
     local ac2 = cc.CallFunc:create(handler(self, self.removeSelf))
-    self:getCsbNode():runAction(cc.Sequence:create(ac1, ac2))
+    self:getCsbNode():runAction(cc.Sequence:create(ac1,ac2))
 end
 
 function ViewBase:removeSelf()
@@ -100,11 +100,11 @@ end
 function ViewBase:toWait(isShow)
     local net_work = self:getChildByName("net_work")
     if not net_work then
-        net_work = self:getSimpleLayout("net_work", true)
+        net_work = self:getSimpleLayout("net_work", false)
         self:addChild(net_work, 100)
     end
     net_work:setVisible(isShow)
-    if isShow then self.wait_time = 3 end
+    if isShow then self.wait_time = 60 end
 end
 -- 区分ui和网络请求
 function ViewBase:setTouch(isEanble)
@@ -128,10 +128,10 @@ function ViewBase:getSimpleLayout(name, isColor)
 
     if isColor then
         touch_layer:setBackGroundColorType(1)
-        touch_layer:setBackGroundColor( { r = 0, g = 0, b = 0 })
+        touch_layer:setBackGroundColor( { r = 6, g = 27, b = 46 })
     end
 
-    touch_layer:setBackGroundColorOpacity(50)
+    touch_layer:setBackGroundColorOpacity(204)
     touch_layer:setTouchEnabled(true);
     touch_layer:setLayoutComponentEnabled(true)
     touch_layer:setName(name)
@@ -163,7 +163,6 @@ function ViewBase:createResoueceNode(resourceFilename)
         self.resourceNode_:removeSelf()
         self.resourceNode_ = nil
     end
-    -- self.resourceNode_ = cc.CSLoader:createNode(resourceFilename)
     self.resourceNode_ = cc.CSLoader:createNodeWithVisibleSize(resourceFilename)
     assert(self.resourceNode_, string.format("ViewBase:createResoueceNode() - load resouce node from file \"%s\" failed", resourceFilename))
     self:addChild(self.resourceNode_)

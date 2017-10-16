@@ -2,25 +2,29 @@
 --Date
 --此文件由[BabeLua]插件自动生成
 local ClubTaskCell = class("ClubTaskCell", cc.Node)
+local ShowInfoBtnPath = "loadImage/club_wall_task_showInfoBtn.png"
+local CollectBtnPath = "loadImage/club_wall_task_collectBtn.png"
 function ClubTaskCell:ctor(data,users,i)
-    self.node = cc.CSLoader:createNode("csb/club_cell/ClubTaskCell.csb")
+    local node = cc.CSLoader:createNode("club/ClubTaskCell.csb")
+    self.node = node:getChildByName("root")
+    self.bg =  self.node:getChildByName("bg")
+    self.actTable_ = {}
 
     self.taskInfo_ = data
     self.usersInfo_ = users
     self.finish_ = false
     self.date_ = i
 
-    self.btn_show_ =  self.node:getChildByName("btn_show")
-    self.btn_show_:addTouchEventListener(handler(self, self.touchEvent))
-
     bole.socket:registerCmd("club_collect", self.club_collect, self)
 
-    self:initInfo()
+    self:initPanelTask()
+    self:initActNode()
+    self:initInfo() 
     self:initShowInfo()
     self:initTop()
     self:initCollectStatus()
 
-    self:addChild(self.node)
+    self:addChild(node)
 end
 
 
@@ -28,10 +32,20 @@ function ClubTaskCell:refrushTaskInfo(data,users)
     self.taskInfo_ = data
     self.usersInfo_ = users
     self.finish_ = false
+    self:initActNode()
     self:initInfo()
     self:initShowInfo()
     self:initTop()
     self:initCollectStatus()
+end
+
+function ClubTaskCell:initActNode()
+    self.act_star1 = self.node:getChildByName("act_star1")
+    self.act_star1:removeAllChildren()
+    self.act_star2 = self.node:getChildByName("act_star2")
+    self.act_star2:removeAllChildren()
+    self.act_star3 = self.node:getChildByName("act_star3")
+    self.act_star3:removeAllChildren()
 end
 
 function ClubTaskCell:initInfo()
@@ -61,7 +75,7 @@ function ClubTaskCell:initInfo()
         self.taskInfo_.stageTotal = total * 0.5
         self.taskInfo_.stageAmount = total * 0.5
     end
-  
+    self.taskInfo_.isFinish = self.finish_
     self.taskInfo_.rewardStr = self:getRewardStr("clubevent_reward" .. self.taskInfo_.stage)
     local titleStr = bole:getConfigCenter():getConfig("clubevent", tonumber(self.taskInfo_.id), "clubevent_text")
     self.taskInfo_.titleStr = string.format(titleStr, bole:formatCoins(self.taskInfo_.stageTotal,5) ,self.taskInfo_.rewardStr)
@@ -78,7 +92,6 @@ function ClubTaskCell:initInfo()
     
 end
 
-
 function ClubTaskCell:getRewardStr(stageStr)
     local rewardStr = ""
     local rewardIdTable = bole:getConfigCenter():getConfig("clubevent_reward", 100 + tonumber(self.taskInfo_.level) , stageStr )
@@ -89,15 +102,19 @@ function ClubTaskCell:getRewardStr(stageStr)
          if type == 10 then
             typeStr = "coins"
             self.taskInfo_.coinsRewards = number
+            self.collectInfo_:getChildByName("coinsNum"):setString(bole:formatCoins(number,3) )
          elseif type == 9 then
             typeStr = "diamond"
             self.taskInfo_.diamondRewards = number
          elseif type == 2 then
             typeStr = "铜卷"
+            self.collectInfo_:getChildByName("lettoryNum"):setString(number)
          elseif type == 3 then
             typeStr = "银卷"
+            self.collectInfo_:getChildByName("lettoryNum"):setString(number)
          elseif type == 4 then
             typeStr = "金券"
+            self.collectInfo_:getChildByName("lettoryNum"):setString(number)
          elseif type == 8 then
             typeStr = "大厅加速券"
          else
@@ -112,37 +129,71 @@ function ClubTaskCell:getRewardStr(stageStr)
     return rewardStr
 end
 
+function ClubTaskCell:initPanelTask()
+    local panel_task = self.node:getChildByName("panel_task")
+    panel_task:addTouchEventListener(handler(self, self.touchEvent))
+    self.collectInfo_ = panel_task:getChildByName("collectInfo_bg")
+    self.noComp_showInfo_ = panel_task:getChildByName("noComp_showInfo")
+    self.can_collect_ = panel_task:getChildByName("can_collect")
+    self.comp_showInfo_ = panel_task:getChildByName("comp_showInfo")
+
+    self.sp_star1_ = self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no")
+    self.sp_star2_ = self.node:getChildByName("sp_star2"):getChildByName("sp_star2_no")
+    self.sp_star3_ = self.node:getChildByName("sp_star3"):getChildByName("sp_star3_no")
+    self.themeIcon_ = self.node:getChildByName("sp_syl")
+    self.comIcon_ = self.themeIcon_:getChildByName("com")
+
+    self.collectInfo_:setVisible(false)
+    self.noComp_showInfo_:setVisible(false)
+    self.can_collect_:setVisible(false)
+    self.comp_showInfo_:setVisible(false)
+end
+
 function ClubTaskCell:initShowInfo()
     --动画展示
-    self.themeIcon_ = self.node:getChildByName("sp_syl")
+   
     if self.bar_cell_ == nil then
         self.bar_cell_ =  self:createProgressTimer()
-        self:addChild(self.bar_cell_)
+        self.noComp_showInfo_:getChildByName("node_slider"):addChild(self.bar_cell_)
     end
+   
     self:showAction()
 
     self.titleTxt_ = self.node:getChildByName("txt_tips_1")
-    self.titleTxt_:setString(self.taskInfo_.titleStr)
-    --self.bar_cell_ =  self.node:getChildByName("bar_cell") 
-   -- self.bar_cell_:setPercent(tonumber(self.taskInfo_.stageAmount) / tonumber(self.taskInfo_.stageTotal) * 100)
+    self.txt_coins_ = self.node:getChildByName("txt_coins")
+    self.txt_coins_:setString(bole:formatCoins(self.taskInfo_.stageTotal,25))
 
-    self.timeEnd_ = self.node:getChildByName("txt_time") 
+    self.timeEnd_ = self.node:getChildByName("time_bg") 
+    self.unit_1 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_1") 
+    self.unit_2 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_2") 
+    self.time_1 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_m") 
+    self.time_2 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_s") 
+    local clockAct = sp.SkeletonAnimation:create("shop_act/biao_1.json", "shop_act/biao_1.atlas")
+    clockAct:setScale(0.42)
+    clockAct:setAnimation(0, "animation", true)
+    self.timeEnd_:getChildByName("panel_time"):getChildByName("node_act"):addChild(clockAct)
+
+    self.timeEnd_:getChildByName("panel_end"):setVisible(false)
     if self.taskInfo_.leave ~= nil then
-        self.timeEnd_:setString("ends in: " .. bole:timeFormat(self.taskInfo_.leave))
+        bole.clubTask_surplus_time = self.taskInfo_.leave
+        self:setTime(bole.clubTask_surplus_time)
         if self.scheduler_ == nil then
             local function update()
-                 self.timeEnd_:setString("ends in: " .. bole:timeFormat(self.taskInfo_.leave))
-                self.taskInfo_.leave = self.taskInfo_.leave - 1
+                self:setTime(bole.clubTask_surplus_time)
             end
             self.scheduler_ = cc.Director:getInstance():getScheduler():scheduleScriptFunc(update, 1, false)
-        end
-        
+        end        
     else
-        self.timeEnd_:setString("ended")
+        self.timeEnd_:getChildByName("panel_time"):setVisible(false)
+        self.timeEnd_:getChildByName("panel_end"):setVisible(true)
+        if self.scheduler_ then
+            cc.Director:getInstance():getScheduler():unscheduleScriptEntry(self.scheduler_)
+            self.scheduler_ = nil
+        end
     end
 
     local theme_icons = { "oz_icon", "farm_icon", "elvis_icon","dragon_icon","sea_icon","chilli_icon","temple_icon" }
-    self.themeIcon_:loadTexture("res/theme_icon/" .. theme_icons[self.taskInfo_.theme_id] .. ".png")
+    self.themeIcon_:loadTexture("theme_icon/theme_0" .. self.taskInfo_.theme_id .. ".png")
     self.themeIcon_:addTouchEventListener(handler(self, self.touchEvent))
     if self.date_ ~= 1 then
         self.themeIcon_:setTouchEnabled(false)
@@ -152,59 +203,92 @@ function ClubTaskCell:initShowInfo()
     end
 end
 
+function ClubTaskCell:setTime(time)
+    if time > 0 then
+        local s = math.floor(time) % 60
+        local m = math.floor(time / 60) % 60
+        local h = math.floor(time / 3600) % 24
+
+        if h == 0 then
+            self.unit_1:setString("M")
+            self.unit_2:setString("S")
+            self.time_1:setString(m)
+            self.time_2:setString(s)
+        else
+            self.unit_1:setString("H")
+            self.unit_2:setString("M")
+            self.time_1:setString(h)
+            self.time_2:setString(m)
+        end
+    else
+        self.timeEnd_:getChildByName("panel_time"):setVisible(false)
+        self.timeEnd_:getChildByName("panel_end"):setVisible(true)
+        self.themeIcon_:setTouchEnabled(false)
+        self.themeIcon_:getChildByName("com"):setVisible(true)
+        if self.scheduler_ then
+            cc.Director:getInstance():getScheduler():unscheduleScriptEntry(self.scheduler_)
+            self.scheduler_ = nil
+        end
+    end
+end
+
+
 function ClubTaskCell:initTop()
     for i = 1, 3 do
         self.node:getChildByName("Node_" .. i):removeAllChildren()
+        local head = nil
         if self.taskInfo_.top[i] ~= nil then
-            if self.taskInfo_.top[i].info ~= nil then
-                local head = bole:getNewHeadView(self.taskInfo_.top[i].info) 
-                head:setScale(0.8)
-                head:setSwallow(true)
-                self.node:getChildByName("Node_" .. i):addChild(head)
+            if self.taskInfo_.top[i][1] == bole:getUserDataByKey("user_id") then
+                head = bole:getNewHeadView(bole:getUserData())
+                head:updatePos(head.POS_CLUB_SELF)
             else
-                local info = require("json").decode(self.taskInfo_.top[i][3])
-                local head = bole:getNewHeadView({ user_id = self.taskInfo_.top[i][1], name = info[1], level = info[2], country = info[3] })
-                head:setScale(0.8)
-                head:setSwallow(true)
-                head.Img_headbg:setTouchEnabled(false)
-                self.node:getChildByName("Node_" .. i):addChild(head)
+                if self.taskInfo_.top[i].info ~= nil then
+                    head = bole:getNewHeadView(self.taskInfo_.top[i].info)
+                else
+                    local info = require("json").decode(self.taskInfo_.top[i][3])
+                    head = bole:getNewHeadView( { user_id = self.taskInfo_.top[i][1], name = info[1], icon = info[2], level = info[3], country = info[4] })
+                end
             end
+            head:setScale(0.8)
+            head:setSwallow(true)
+            head.Img_headbg:setTouchEnabled(false)
         else
-                local head = bole:getNewHeadView()
-                head:setScale(0.8)
-                head:setSwallow(true)
-                head.Img_headbg:setTouchEnabled(false)
-                self.node:getChildByName("Node_" .. i):addChild(head)
+            head = cc.Sprite:create("loadImage/club_wall_task_noPlayerIcon.png")
+            head:setScale(0.8)
+            --bole:getNewHeadView()
         end
-    end
 
+        self.node:getChildByName("Node_" .. i):addChild(head)
+    end
 end
 
 
 
 function ClubTaskCell:initCollectStatus()
     if self.taskInfo_.stage == 1 then
-        --self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(false)
-        --self.node:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(false)
-        --self.node:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(false)
         self.themeIcon_:setTouchEnabled(true)
+        self.sp_star1_:setVisible(false)
+        self.sp_star2_:setVisible(false)
+        self.sp_star3_:setVisible(false)
+        self.comIcon_:setVisible(false)
     elseif self.taskInfo_.stage == 2 then
-        --self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(true)
-        --self.node:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(false)
-        --self.node:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(false)
         self.themeIcon_:setTouchEnabled(true)
+        self.sp_star1_:setVisible(true)
+        self.sp_star2_:setVisible(false)
+        self.sp_star3_:setVisible(false)
+        self.comIcon_:setVisible(false)
     elseif self.taskInfo_.stage == 3 then
-        --self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(true)
-        --self.node:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(true)
-        --self.node:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(false)
         self.themeIcon_:setTouchEnabled(true)
+        self.sp_star1_:setVisible(true)
+        self.sp_star2_:setVisible(true)
+        self.sp_star3_:setVisible(false)
+        self.comIcon_:setVisible(false)
         if self.finish_ then
-            --self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(true)
-            --self.node:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(true)
-            --self.node:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(true)
-            self.btn_show_:getChildByName("txt_key"):setString("Show Info")
+            self.collectInfo_:setVisible(false)
             self.themeIcon_:setTouchEnabled(false)
-            --self.themeIcon_:getChildByName("com"):setVisible(true)
+            self.comIcon_:setVisible(true)
+            self.sp_star3_:setVisible(true)
+            self.bg:loadTexture("loadImage/club_frame_requests_dark.png")
         end
     end
 
@@ -214,27 +298,47 @@ function ClubTaskCell:initCollectStatus()
     end
 
     if self.taskInfo_.collect == 0 then
-        self.btn_show_:getChildByName("txt_key"):setString("Show Info")
-        self.btn_show_:setTouchEnabled(true)
-        self.btn_show_:setBright(true)
+        self.collectInfo_:setVisible(true)
+        self.noComp_showInfo_:setVisible(true)
+        self.can_collect_:setVisible(false)
+        self.comp_showInfo_:setVisible(false)
+        if self.finish_ then
+            self.collectInfo_:setVisible(false)
+            self.noComp_showInfo_:setVisible(false)
+            self.comp_showInfo_:setVisible(true)
+        end
     elseif self.taskInfo_.collect >= 1000 then
-        self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_reward1"))
-        self.btn_show_:setTouchEnabled(true)
-        self.btn_show_:setBright(true)
+        --self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_reward1"))
+        self:getRewardStr("clubevent_reward1")
+        self.collectInfo_:setVisible(true)
+        self.noComp_showInfo_:setVisible(false)
+        self.can_collect_:setVisible(true)
+        self.comp_showInfo_:setVisible(false)
     elseif self.taskInfo_.collect >= 100 and self.taskInfo_.collect < 1000 then
-        self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_reward2"))
-        self.btn_show_:setTouchEnabled(true)
-        self.btn_show_:setBright(true)
+        --self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_reward2"))
+        self:getRewardStr("clubevent_reward2")
+        self.collectInfo_:setVisible(true)
+        self.noComp_showInfo_:setVisible(false)
+        self.can_collect_:setVisible(true)
+        self.comp_showInfo_:setVisible(false)
     elseif self.taskInfo_.collect >= 10 and self.taskInfo_.collect < 100 then
-        self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_reward3"))
-        self.btn_show_:setTouchEnabled(true)
-        self.btn_show_:setBright(true)
+        --self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_reward3"))
+        self:getRewardStr("clubevent_reward3")
+        self.collectInfo_:setVisible(true)
+        self.noComp_showInfo_:setVisible(false)
+        self.can_collect_:setVisible(true)
+        self.comp_showInfo_:setVisible(false)
     elseif self.taskInfo_.collect >= 1 and self.taskInfo_.collect <= 3 then
-        self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_specialreward" .. self.taskInfo_.collect ))
-        self.btn_show_:setTouchEnabled(true)
-        self.btn_show_:setBright(true)
+        --self.btn_show_:getChildByName("txt_key"):setString(self:getRewardStr("clubevent_specialreward" .. self.taskInfo_.collect ))
+        self:getRewardStr("clubevent_specialreward" .. math.min(2,self.taskInfo_.collect))
+        --self.btn_show_:getChildByName("txt_key"):setString("Collect")
+        self.collectInfo_:setVisible(true)
+        self.noComp_showInfo_:setVisible(false)
+        self.can_collect_:setVisible(true)
+        self.comp_showInfo_:setVisible(false)
     end
-
+    self.bar_cell_:setPercentage(self.taskInfo_.percent)
+    self.vip_progressBarlight_:setPosition(206 * self.taskInfo_.percent / 100 - 103,0)
 end
 
 
@@ -256,16 +360,16 @@ function ClubTaskCell:touchEvent(sender, eventType)
             self:complete()
         elseif name == "sp_syl" then
             bole:getAppManage():startGame(self.taskInfo_.theme_id)
-        elseif name == "btn_show" then
+        elseif name == "panel_task" then
             if self.taskInfo_.collect == 0 then
-                if tonumber(bole:getUserDataByKey("club")) == 0 then
-                    bole:getUIManage():openClubTipsView(11,nil)
-                else
+                if bole:getClubManage():isInClub() then
                     self:showInfo()
+                else
+                    bole:popMsg({msg ="Sorry,you have left club." , title = "collect" , cancle = false})
                 end
             else
-                self.btn_show_:setTouchEnabled(false)
-                self.btn_show_:setBright(false)
+                --self.btn_show_:setTouchEnabled(false)
+                --self.btn_show_:setBright(false)
                 bole.socket:send("club_collect",{date = self.taskInfo_.date },true)
                 --self:collectReward(100)
             end
@@ -280,9 +384,8 @@ end
 function ClubTaskCell:collectReward(collect)
     print(self.taskInfo_.coinsRewards)
     if self.taskInfo_.coinsRewards ~= nil then
-        --bole:getAppManage():addCoins(tonumber(self.taskInfo_.coinsRewards))
-        bole:getUserData():updateSceneInfo("coins")
-        bole:getUserData():updateSceneInfo("diamond")
+        bole:getAppManage():addCoins(tonumber(self.taskInfo_.coinsRewards))
+     --   bole:getUserData():updateSceneInfo("diamond")
     end
     --TODO其他奖励
     self.taskInfo_.collect = self.taskInfo_.collect - collect
@@ -298,18 +401,20 @@ end
 
 
 function ClubTaskCell:club_collect(t,data)
-    if t == "club_collect" then
+    if t == "club_collect" then  --
         if data.error == 0 then
             local collect = data.collect
             self:collectReward(collect)
-        elseif data.error == 2 then
-            bole:getUIManage():openClubTipsView(11,nil)
+        elseif data.error == 2 then  --已经退出联盟
+            bole:popMsg({msg ="Sorry,you have left club." , title = "collect" , cancle = false})
+        elseif data.error ~= nil then
+            bole:popMsg({msg ="error:" .. data.error , title = "collect" })
         end
     end
 end
 
 function ClubTaskCell:showInfo()
-    bole:getUIManage():openUI("ClubTaskInfoLayer",true,"csb/club")
+    bole:getUIManage():openNewUI("ClubTaskInfoLayer",true,"club","app.views.club")
     bole:postEvent("initClubTaskInfoLayer", {task = self.taskInfo_, users = self.usersInfo_})
 end
 
@@ -333,6 +438,9 @@ function ClubTaskCell:showAction()
             end
         end
     end
+    --[[
+     --self.btn_show_
+    --self.infoShow_
 
       if stage == 1 then
             self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(false)
@@ -363,9 +471,37 @@ function ClubTaskCell:showAction()
     local progressTo2 = cc.ProgressTo:create( (100 - percent) / 100, 100)
     local progressTo3 = cc.ProgressTo:create( 1, 100) 
     local clear = cc.CallFunc:create(function() self.bar_cell_:setPercentage(0) end)  
-    local opemStar1 = cc.CallFunc:create(function() self.node:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(true) end) 
-    local opemStar2 = cc.CallFunc:create(function() self.node:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(true) end) 
-    local opemStar3 = cc.CallFunc:create(function() self.node:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(true) self.themeIcon_:getChildByName("com"):setVisible(true) end) 
+    local opemStar1 = cc.CallFunc:create( function()
+        local starAct = sp.SkeletonAnimation:create("club_act/xingxing_1.json", "club_act/xingxing_1.atlas")
+        starAct:setAnimation(0, "animation", false)
+        self.act_star1:addChild(starAct)
+        
+        self.actTable_[1] = starAct
+    end )
+    local opemStar2 = cc.CallFunc:create( function()
+        local starAct = sp.SkeletonAnimation:create("club_act/xingxing_1.json", "club_act/xingxing_1.atlas")
+        starAct:setAnimation(0, "animation", false)
+        self.act_star2:addChild(starAct)
+        
+        self.actTable_[2] = starAct
+    end )
+    local opemStar3 = cc.CallFunc:create( function()
+        local starAct = sp.SkeletonAnimation:create("club_act/xingxing_1.json", "club_act/xingxing_1.atlas")
+        starAct:setAnimation(0, "animation", false)
+        self.act_star3:addChild(starAct)
+        self.themeIcon_:getChildByName("com"):setVisible(true)
+        
+        self.actTable_[3] = starAct
+    end ) 
+
+    local collectBtnAct = cc.CallFunc:create( function()
+        local collectBtnAct = sp.SkeletonAnimation:create("club_act/julebu_jindutiao_1.json", "club_act/julebu_jindutiao_1.atlas")
+        collectBtnAct:setAnimation(0, "zhangman", false)
+        collectBtnAct:setPosition(1108.00, 36.00)
+        self.node:addChild(collectBtnAct)
+
+        self.actTable_[4] = collectBtnAct
+    end ) 
 
     if stage == self.taskInfo_.stage then
         if percent < self.taskInfo_.percent then
@@ -395,6 +531,8 @@ function ClubTaskCell:showAction()
         end
     end
 
+    --self.bar_cell_:runAction(cc.Sequence:create(progressTo2,opemStar1,clear,progressTo3,opemStar2,clear,progressTo3,opemStar3,collectBtnAct)) 
+    --]]
     self.nowSchedule_ = {}
     self.nowSchedule_.date = self.date_
     self.nowSchedule_.stage = self.taskInfo_.stage
@@ -405,30 +543,37 @@ function ClubTaskCell:showAction()
     else
         self.nowSchedule_.finish = 0
     end
+    
 end
 
 
 function ClubTaskCell:createProgressTimer()
-       
-    local bloodEmptyBg = cc.Sprite:create("res/club/club_progressbar01.png")
-    bloodEmptyBg:setPosition(-222,-27)
-    self:addChild(bloodEmptyBg)  
-  
-    local bloodBody = cc.Sprite:create("res/club/club_progressbar02.png")  
+    local bloodBody = cc.Sprite:create("loadImage/club_wall_task_progressbar01.png")  
  
     --创建进度条  
     local bloodProgress = cc.ProgressTimer:create(bloodBody)  
     bloodProgress:setType(cc.PROGRESS_TIMER_TYPE_BAR) --设置为条形 type:cc.PROGRESS_TIMER_TYPE_RADIAL  
     bloodProgress:setMidpoint(cc.p(0,0)) --设置起点为条形坐下方  
     bloodProgress:setBarChangeRate(cc.p(1,0))  --设置为竖直方向  
-    bloodProgress:setPercentage(10) -- 设置初始进度为30  
-    bloodProgress:setPosition(-222,-27)  
+    bloodProgress:setPercentage(100) -- 设置初始进度为30  
+    bloodProgress:setPosition(0,0)  
+
+    self.vip_progressBarlight_ = cc.Sprite:create("loadImage/club_wall_progressbar_light.png")  
+    local clipNode = cc.ClippingNode:create()
+    clipNode:setAnchorPoint(0.5,0.5)
+    clipNode:setAlphaThreshold(0)
+    clipNode:setStencil(cc.Sprite:create("loadImage/club_wall_task_progressbar01.png"))
+    self.noComp_showInfo_:getChildByName("node_slider"):addChild(clipNode)  
+    clipNode:addChild(self.vip_progressBarlight_)
+    self.vip_progressBarlight_:setAnchorPoint(1,0.5)
+    self.vip_progressBarlight_:setPosition(0,0)
+
+
     return bloodProgress
 end
 
 function ClubTaskCell:exit()
     if self.scheduler_ then
-        print("remove scheduler --------------------------------------------------------")
         cc.Director:getInstance():getScheduler():unscheduleScriptEntry(self.scheduler_)
         self.scheduler_ = nil
     end

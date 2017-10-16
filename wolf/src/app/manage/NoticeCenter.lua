@@ -48,8 +48,8 @@ function NoticeCenter:displayPopView(item)
 
     headNode:removeAllChildren(true)
     if item.userId then
-        local node = bole:getNewHeadView({user_id = item.userId, user_name = item.userName or ""})
-        node:updatePos(head.POS_NOTICE)
+        local node = bole:getNewHeadView({user_id = item.userId,icon=item.icon, user_name = item.userName or ""})
+        node:updatePos(node.POS_NOTICE)
         headNode:addChild(node)
     end
 
@@ -59,7 +59,7 @@ function NoticeCenter:displayPopView(item)
     if item.clickFunc then
         local function onClick(event)
             if event.name == "ended" then
-                self:close()
+--                self:close()
                 item.clickFunc()
             end
         end
@@ -74,7 +74,7 @@ function NoticeCenter:showPop(item)
 
     self.isShowingPopupNotice = true
     self.showingPopupViewAction:play("moveIn", false)
-
+    self:displayPopView(item)
     local delayAct = cc.DelayTime:create(2)
     local callFunAct = cc.CallFunc:create(function()
         self.showingPopupViewAction:play("moveOut", false)
@@ -109,9 +109,9 @@ function NoticeCenter:createPopView()
     scene:addChild(rootNode, bole.ZORDER_TOP)
 
     local node = rootNode:getChildByName("clip"):getChildByName("icon")
-    local head = node:removeChildByName("head")
-    local content = node:removeChildByName("content")
-    local gotoBtn = node:removeChildByName("gotoBtn")
+    local head = node:getChildByName("head")
+    local content = node:getChildByName("content")
+    local gotoBtn = node:getChildByName("gotoBtn")
     local views = {head = head, content = content, gotoBtn = gotoBtn}
     self.views = views
 end
@@ -132,98 +132,159 @@ function NoticeCenter:onResponse(t, data)
     local noticeType
     local userId
     local userName
-    local clickFunc  --点击跳转
-    if "receive_club_application" == t then  --收到别人的公会申请{'user_id':0, 'name':""}
-        --信息显示在request界面，保留一星期.
+    local clickFunc
+    -- 点击跳转
+    if "receive_club_application" == t then
+        -- 收到别人的公会申请{'user_id':0, 'name':""}
+        -- 信息显示在request界面，保留一星期.
         noticeType = NoticeType.head_content_button
-        content = "你收到了其他玩家的公会申请。"
+        content = "You have received applications from other guilds."
         userId = data.user_id
         userName = data.name
-        clickFunc = function()  --跳转到俱乐部的request页面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）
+        bole:postEvent("receive_club_application_toManage", data)
+        clickFunc = function()
+            -- 跳转到俱乐部的request页面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）
+            bole:getUIManage():jumpToClubView("club_request")
         end
-    elseif "club_application_result" == t then  --收到leader的公会申请处理结果 {}
-        
-    elseif "receive_club_invitation" == t then  --收到leader的公会邀请 {}
-        --信息显示在join club界面，保留一个月
+    elseif "club_application_result" == t then
+        -- 收到leader的公会申请处理结果 {}
+        bole:getClubManage():joinClub()
+        content = "Your club application is agreed."
+    elseif "receive_club_invitation" == t then
+        -- 收到leader的公会邀请 {}
+        -- 信息显示在join club界面，保留一个月
         noticeType = NoticeType.content_button
-        content = "有一家俱乐部想邀请你加入俱乐部"
-        clickFunc = function()  --玩家点击后弹出该俱乐部详细信息界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）
+        bole:postEvent("refreshClubJoinLayer")
+        content = "There is a club that wants to invite you to join the club"
+        clickFunc = function()
+            -- 玩家点击后弹出该俱乐部详细信息界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）
+            bole:getUIManage():openClubInfoLayer(data.id)
         end
-    elseif "club_invitation_result" == t then  --玩家同意leader的公会邀请 {}
-        
-    elseif "receive_accreditation" == t then  --收到被委派为公会联合首领消息 {}
+    elseif "club_invitation_result" == t then
+        -- 玩家同意leader的公会邀请 {}
+        content = "a player agree your invitation"
+    elseif "receive_accreditation" == t then
+        -- 收到被委派为公会联合首领消息 {}
         noticeType = NoticeType.content_button
-        content = "你已经被委派为联合首领了"
-        clickFunc = function()  --玩家点击后跳转到俱乐部的members界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+        content = "You have been appointed as a joint leader"
+        clickFunc = function()
+            -- 玩家点击后跳转到俱乐部的members界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+            bole:getUIManage():jumpToClubView("club_member")
         end
-    elseif "receive_demotion" == t then  --收到公会降职的消息 {}
+    elseif "receive_demotion" == t then
+        -- 收到公会降职的消息 {}
         noticeType = NoticeType.content_button
-        content = "你被公会首领降职了"
-        clickFunc = function()  --玩家点击后跳转到俱乐部的members界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+        content = "You were demoted by the guild leader"
+        clickFunc = function()
+            -- 玩家点击后跳转到俱乐部的members界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+            bole:getUIManage():jumpToClubView("club_member")
         end
-    elseif "receive_kicked_out_from_club" == t then  --收到被公会踢出的消息 {}
+    elseif "receive_kicked_out_from_club" == t then
+        -- 收到被公会踢出的消息 {}
         noticeType = NoticeType.content_button
-        content = "你被公会首领移除了公会"
-        clickFunc = function()  --玩家点击后跳转到俱乐部的join club界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+        content = "You were removed from the guild by the guild leader"
+        bole:getClubManage():leaveClub()
+        bole:postEvent("club_kickOuted")
+        clickFunc = function()
+            -- 玩家点击后跳转到俱乐部的join club界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+            bole:getUIManage():jumpToClubView("club_wall")
         end
-    elseif "receive_club_event_msg" == t then  --收到公会任务奖励可领的消息 {}
+    elseif "receive_club_event_msg" == t then
+        -- 收到公会任务奖励可领的消息 {}
         noticeType = NoticeType.content_button
-        content = "你完成了俱乐部的任务，可领取奖励"
-        clickFunc = function()  --玩家点击后转到俱乐部的club wal界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+        content = "You have completed the club's quest to receive a reward"
+        bole:postEvent("addClubTaskCellToChat")
+        clickFunc = function()
+            -- 玩家点击后转到俱乐部的club wal界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+            bole:getUIManage():jumpToClubView("club_wall")
         end
-    elseif "receive_f_application" == t then  --收到好友请求 {'user_id':0, 'name':""}
-        noticeType = NoticeType.head_content_button
-        content = "想加你为好友"
-        userId = data.user_id
-        userName = data.name
-        clickFunc = function()  --玩家点击后弹出好友系统的request界面
+    elseif "receive_f_application" == t then
+        -- 收到好友请求 {'user_id':0, 'name':""}
+        if not bole:getFriendManage():isFriend(data.user_id) then
+            noticeType = NoticeType.head_content_button
+            content = "Want to add you as a friend"
+            userId = data.user_id
+            userName = data.name
+            bole:postEvent("receive_f_application_toManage", data)
+        else
+            content = "Rejected your friend request"
+            userId = data.user_id
+            userName = data.name
+        end
+        clickFunc = function()
+            -- 玩家点击后弹出好友系统的request界面
+            bole:getUIManage():jumpToFriendView("friend_request")
         end
     elseif "receive_f_application_result" == t then
-        --好友请求的处理结果 {'sender_name': 发送人的名字，'sender': 发送人ID， 'result': 处理结果 0拒绝   1接受}
+        -- 好友请求的处理结果 {'sender_name': 发送人的名字，'sender': 发送人ID， 'result': 处理结果 0拒绝   1接受}
         noticeType = NoticeType.head_content_button
         if data.result == 0 then
-            content = "同意了你的好友请求"
+            bole:getFriendManage():removeTofriendIdList(data.user_id)
+            content = "accepted your friend request"
         else
-            content = "拒绝了你的好友请求"
+            bole:getFriendManage():addTofriendIdList(data.user_id)
+            content = "Rejected your friend request"
+            -- userId = data.sender
+            -- userName = data.sender_name
+            clickFunc = function()
+                -- 玩家点击后弹出好友系统的request界面
+                bole:getUIManage():jumpToFriendView("friend")
+            end
         end
-        userId = data.sender
-        userName = data.sender_name
-        clickFunc = function()  --玩家点击后弹出好友系统的request界面
-        end
-    elseif "receive_club_league_reward" == t then  --收到联赛奖励可领的消息 {}
+    elseif "receive_club_league_reward" == t then
+        -- 收到联赛奖励可领的消息 {}
         noticeType = NoticeType.content_button
-        content = "你有联赛奖励可以领取"
-        clickFunc = function()  --玩家点击后跳转到League界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+        content = "You have a league reward can receive"
+        clickFunc = function()
+            -- 玩家点击后跳转到League界面（如果玩家当前在房间中，点击弹框要求玩家确认是否离开当前房间）.
+            bole:getUIManage():jumpToLeagueView("league")
         end
-    elseif "receive_friend_login" == t then  --收到好友登陆消息 {'user_id':0, 'name':""}
-        --只在线玩家提示，服务器下发玩家头像和名字；如果玩家当前在老虎机内，提示可点击，显示玩家头像，名字，固定文本和按钮，；
-        --如果玩家当前不在老虎机内，提示不可点击，显示玩家头像，名字和固定文本，信息不保留
+    elseif "receive_friend_login" == t then
+        -- 收到好友登陆消息 {'user_id':0, 'name':""}
+        -- 只在线玩家提示，服务器下发玩家头像和名字；如果玩家当前在老虎机内，提示可点击，显示玩家头像，名字，固定文本和按钮，；
+        -- 如果玩家当前不在老虎机内，提示不可点击，显示玩家头像，名字和固定文本，信息不保留
         if bole:getSpinApp():isThemeAlive() then
             noticeType = NoticeType.head_content_button
-            clickFunc = function()  --点击后向好友发送邀请加入此房间
-                
+            clickFunc = function()
+                -- 点击后向好友发送邀请加入此房间
+                bole.socket:send(bole.SEND_ROOM_INVITATION, { target_uid = { data.user_id } })
             end
         else
             noticeType = NoticeType.head_content
         end
-        content = "你的好友登录了游戏"
+        content = "Your friend has logged in the game"
         userId = data.user_id
         userName = data.name
-    elseif "complete_task" == t then  --完成日常任务 {'t_ids':[]} 完成任务的任务ID
+    elseif "complete_task" == t then
+        -- 完成日常任务 {'t_ids':[]} 完成任务的任务ID
         noticeType = NoticeType.content_button
-        content = "完成任务奖励"
-        clickFunc = function()  --玩家点击后弹出个人资料界面，信息在个人资料界面中保留一天
+        content = "Complete the task reward"
+        clickFunc = function()
+            -- 玩家点击后弹出个人资料界面，信息在个人资料界面中保留一天
         end
     elseif "title_change" == t then
-        --完成头衔任务 {'title':, 'coins':, 'win_total':} 
-        --其中，title是现在玩家可用的最大title的ID， coins 是玩家当前coins， win_total 是玩家赢得的coins数量
+        -- 完成头衔任务 {'title':, 'coins':, 'win_total':}
+        -- 其中，title是现在玩家可用的最大title的ID， coins 是玩家当前coins， win_total 是玩家赢得的coins数量
         noticeType = NoticeType.content_button
-        content = "完成任务奖励"
-        clickFunc = function()  --玩家点击后弹出个人资料界面
+        content = "Complete the task reward"
+        clickFunc = function()
+            -- 玩家点击后弹出个人资料界面
+        end
+    elseif "receive_club_gift_msg" == t then
+        content = "Player buy a club offer"
+        bole:postEvent("chat_clubBuy", data)
+    elseif bole.RECV_ROOM_INVITATION == t then
+        -- 收到好友请求 {'user_id':0, 'name':""}
+        noticeType = NoticeType.head_content_button
+        content = data.inviter_name.." invites you to play together"
+        userId = data.inviter
+        userName = data.inviter_name
+        clickFunc = function()
+            bole:getAppManage():sendAcceptIntive(data.inviter,data.room_id,data.theme_id)
         end
     end
 
-    local item = {type = noticeType, content = content, clickFunc = clickFunc, userId = userId, userName = userName}
+    local item = { type = noticeType, content = content, clickFunc = clickFunc, userId = userId, userName = userName }
     self:pushOneNotice(item)
 end
 
@@ -242,7 +303,8 @@ function NoticeCenter:addListeners()
         "receive_club_league_reward",
         "receive_friend_login",
         "complete_task",
-        "title_change"
+        "title_change",
+        "receive_club_gift_msg",
     }
 
     for _, name in ipairs(listenerNames) do

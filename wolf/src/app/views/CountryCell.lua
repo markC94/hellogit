@@ -1,79 +1,93 @@
 -- region *.lua
 -- Date
 -- 此文件由[BabeLua]插件自动生成
-local CountryCell = class("CountryCell",ccui.Layout)
-function CountryCell:ctor(index)
-    self:setContentSize({ width = 430, height = 70 })
-    -- Create txt_name
-    self.index=index
-    local txt_name = ccui.Text:create()
-    txt_name:ignoreContentAdaptWithSize(true)
-    txt_name:setTextAreaSize( { width = 0, height = 0 })
-    txt_name:setFontName("font/FZKTJW.TTF")
-    txt_name:setFontSize(26)
-    txt_name:setString([[Algeria]])
-    txt_name:setLayoutComponentEnabled(true)
-    txt_name:setName("txt_name")
-    txt_name:setTag(289)
-    txt_name:setCascadeColorEnabled(true)
-    txt_name:setCascadeOpacityEnabled(true)
-    txt_name:setPosition(62.2800, 35.0000)
-    txt_name:setAnchorPoint(0,0.5000)
-    txt_name:setTextColor( { r = 95, g = 129, b = 158 })
-    local layout = ccui.LayoutComponent:bindLayoutComponent(txt_name)
-    layout:setPositionPercentX(0.1415)
-    layout:setPositionPercentY(0.5000)
-    layout:setPercentWidth(0.1705)
-    layout:setPercentHeight(0.4000)
-    layout:setSize( { width = 75.0000, height = 28.0000 })
-    layout:setLeftMargin(24.7800)
-    layout:setRightMargin(340.2200)
-    layout:setTopMargin(21.0000)
-    layout:setBottomMargin(21.0000)
-    self:addChild(txt_name)
-    self.txt_name=txt_name
-    -- Create sp_icon
-    cc.SpriteFrameCache:getInstance():addSpriteFrames("plist/Head.plist")
-    local sp_icon = cc.Sprite:createWithSpriteFrameName("head/levelup_N_CN.png")
-    sp_icon:setName("sp_icon")
-    sp_icon:setTag(290)
-    sp_icon:setCascadeColorEnabled(true)
-    sp_icon:setCascadeOpacityEnabled(true)
-    sp_icon:setPosition(373.7934, 35.0000)
-    layout = ccui.LayoutComponent:bindLayoutComponent(sp_icon)
-    layout:setPositionPercentX(0.8495)
-    layout:setPositionPercentY(0.5000)
-    layout:setPercentWidth(0.1023)
-    layout:setPercentHeight(0.6286)
-    layout:setSize( { width = 45.0000, height = 44.0000 })
-    layout:setLeftMargin(351.2934)
-    layout:setRightMargin(43.7066)
-    layout:setTopMargin(13.0000)
-    layout:setBottomMargin(13.0000)
-    sp_icon:setBlendFunc( { src = 1, dst = 771 })
+local CountryCell = class("CountryCell", ccui.Layout)
+function CountryCell:ctor(index,bgIndex)
+    self:setContentSize( { width = 570, height = 80 })
+    self.index = index
+    if index == -1 then
+        index = 2
+    end
+    
+    if bgIndex%2==1 then
+        self.bg=ccui.ImageView:create("player_edit/ui/edit_profile_item_light.png")
+    else
+        self.bg=ccui.ImageView:create("player_edit/ui/edit_profile_item_dark.png")
+    end
+    self.bg:setScale(80 / self.bg:getContentSize().height)
+    self.bg:setAnchorPoint(cc.p(0.5,0.5))
+    self.bg:setPosition(285, 40)
+    self:addChild(self.bg)
+
+    local sp_icon=display.newSprite("flag/flag_" .. index .. ".png")
+    sp_icon:setPosition(64,40)
     self:addChild(sp_icon)
-    self.sp_icon=sp_icon
-    self:initCell(index)
+
+    local name = bole:getConfig("country", index, "countryname_en")
+    local ttfConfig = {fontFilePath="font/bole_ttf.ttf",fontSize=36}
+    local txt_name = cc.Label:createWithTTF(ttfConfig,"99")
+    txt_name:setAnchorPoint(cc.p(0,0.5))
+    txt_name:setPosition(120,40)
+    txt_name:setString(name)
+    print("----------------------------------index:"..index)
+    print("----------------------------------name:"..name)
+    self:addChild(txt_name)
+
+    self.img_icon = sp_icon
+    self.txt_name = txt_name
+
     self:setTouchEnabled(true)
     self:addTouchEventListener(handler(self, self.touchEvent))
+    local index = bole:getUserDataByKey("country")
+
+    self.sp_select=display.newSprite("common/common_g5.png")
+    self.sp_select:setPosition(515, 40)
+    self:addChild(self.sp_select)
+    self.sp_select:setVisible(false)
+
+    self:updateStatus()
 end
 function CountryCell:touchEvent(sender, eventType)
     local name = sender:getName()
     local tag = sender:getTag()
-    print("touchEvent:" .. name)
     if eventType == ccui.TouchEventType.began then
         print("Touch Down")
     elseif eventType == ccui.TouchEventType.moved then
         print("Touch Move")
     elseif eventType == ccui.TouchEventType.ended then
-        bole:postEvent("changeSelect", self.index)
+        print("Touch ended")
+        bole:postEvent("changeCountry", self.index)
     elseif eventType == ccui.TouchEventType.canceled then
         print("Touch Cancelled")
     end
 end
-function CountryCell:initCell(index)
-    local name=bole:getConfig("country",index,"countryname_en")
-    self.txt_name:setString(name)
+function CountryCell:getIndex()
+    return self.index
+end
+function CountryCell:updateStatus(index)
+    local isSelf = false
+    local selfIndex=bole:getUserDataByKey("country")
+    if index then
+        selfIndex=index
+    end
+    if selfIndex == self.index then
+        isSelf = true
+    end
+    if self.index == -1 then
+        self.img_icon:setVisible(false)
+        self.txt_name:setVisible(false)
+        return
+    end
+    if isSelf then
+        self.img_icon:setScale(0.8)
+--        self.txt_name:setScale(1.1)
+        self.sp_select:setVisible(true)
+    else
+        self.img_icon:setScale(0.8)
+        self.sp_select:setVisible(false)
+--        self.txt_name:setScale(1)
+    end
+    
 end
 return CountryCell
 -- endregion

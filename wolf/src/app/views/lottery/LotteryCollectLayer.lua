@@ -56,9 +56,9 @@ function LotteryCollectLayer:collectReward()
     local number = tonumber(bole:getConfigCenter():getConfig("reward", self.collectInfo_.reward_id , "bonus_number"))
 
     if type == 10 then -- coins
-        bole:getUserData():updateSceneInfo("coins")
+       -- bole:getUserData():updateSceneInfo("coins")
     elseif type == 9 then -- diamond
-        bole:getUserData():updateSceneInfo("diamond")
+       -- bole:getUserData():updateSceneInfo("diamond")
     elseif type == 2 then -- 铜卷
         bole:postEvent("changeVouchers",{index = 1, changeNum = number})
     elseif type == 3 then -- 银卷
@@ -68,6 +68,7 @@ function LotteryCollectLayer:collectReward()
     elseif type == 8 then -- 大厅加速券
     
     end  
+    bole:postEvent("changeCollect",self.collectInfo_)
 end
 
 function LotteryCollectLayer:getCollect(id)

@@ -53,7 +53,7 @@ function MngDialogBase:initOver(data)
     self.img_over:setScale(0.1)
     self.img_over:runAction(cc.ScaleTo:create(0.2,1.0))
     local txt_free = ccui.Helper:seekWidgetByName(self.img_over, "txt_free")
-    local txt_coins = ccui.Helper:seekWidgetByName(self.img_over, "txt_coins") b
+    local txt_coins = ccui.Helper:seekWidgetByName(self.img_over, "txt_coins")
     local txt_all = ccui.Helper:seekWidgetByName(self.img_over, "txt_all")
     local btn_back = ccui.Helper:seekWidgetByName(self.img_over, "btn_back")
     if btn_back then

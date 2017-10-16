@@ -8,8 +8,8 @@ function ShowChatInfo:ctor( layer )
     self.spinLayer_ = layer
     local weghit = ccui.Layout:create()
     weghit:setBackGroundColorType(1)
-    weghit:setBackGroundColor({r = 0, g = 0, b = 0})
-    weghit:setBackGroundColorOpacity(102)
+    weghit:setBackGroundColor({r = 6, g = 27, b = 46 })
+    weghit:setBackGroundColorOpacity(204)
     weghit:setAnchorPoint(0.5,0.5)
     weghit:setSize(400,50)
     weghit:setTouchEnabled(true)
@@ -17,13 +17,13 @@ function ShowChatInfo:ctor( layer )
 
     self:addChild(weghit)
 
-    self.label_ = cc.Label:createWithTTF("", "res/font/FZKTJW.TTF", 24)
+    self.label_ = cc.Label:createWithTTF("", "font/bole_ttf.ttf", 24)
     self.label_:setAnchorPoint(0,0.5)
     self.label_:setPosition(10,25)
     weghit:addChild(self.label_)
 
     --[[
-    self.preLabel_ = cc.Label:createWithTTF("", "res/font/FZKTJW.TTF", 24)
+    self.preLabel_ = cc.Label:createWithTTF("", "font/bole_ttf.ttf", 24)
     self.preLabel_:setAnchorPoint(0,0.5)
     self.preLabel_:setPosition(-10,25)
     weghit:addChild(self.preLabel_)

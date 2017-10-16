@@ -7,145 +7,214 @@ FriendInvietLayer.MaxInputLenght = 20
 
 function FriendInvietLayer:onCreate()
     print("FriendInvietLayer:onCreate")
-    self.root_ = self:getCsbNode():getChildByName("root")
+
+    self.facebookCenter_ = bole:getFacebookCenter()        
     self.friendPanel_ = self:getCsbNode():getChildByName("freind")
-    self:initFreindPanel()
+    self.friendPanel_:getChildByName("CheckBox"):addTouchEventListener(handler(self, self.checkBoxEvent))
 
-    self.top_ = self.root_:getChildByName("top")
-    self.view_ = self.root_:getChildByName("view")
-    self.scrollViewScrollMaxLenght_ = 0
-    self:initTop()
-    self:initView()
-    self:adaptScreen()
+    self.facebookView_ = self:getCsbNode():getChildByName("facebookView")
+    self.fbFriendIdList_ = {}
+    self:initFacebookView()
+    self:initTableView()
 
-    bole:getFacebookCenter():getInvitableFriends(function(data) self:refreshInvitaInfo(data)  end)
+    self:refreshFacebookView()
 end
 
 
 function FriendInvietLayer:onEnter()
-    bole:addListener("initFriendInfo", self.initFriendInfo, self, nil, true)
+    bole:addListener("refreshFBFriendView", self.refreshFBFriendView, self, nil, true)
 end
 
-function FriendInvietLayer:initFriendInfo(data)
-    data = data.result
-    self.friendInfo_ = data
-    --self:refreshFriendView(self.friendInfo_)
+function FriendInvietLayer:onExit()
+    bole:removeListener("refreshFBFriendView", self)
 end
 
+function FriendInvietLayer:initFacebookView()
+    self.scrollViewMask_ = self.facebookView_:getChildByName("mask") 
+    self.scrollViewMask_:setVisible(false)
+    
+    self.fbFriendViewPanel_ = self.facebookView_:getChildByName("viewPanel") 
 
-function FriendInvietLayer:initTop()
-    self.top_:getChildByName("title"):setString("Invite FaceBook Friends")
-    local btn_close = self.top_:getChildByName("btn_close")
-    btn_close:addTouchEventListener(handler(self, self.touchEvent))
+    self.noFriendBg_ = self.facebookView_:getChildByName("noF_bg")
+    self.noFriendBg_:setVisible(true)
+    self.noFriendBg_:getChildByName("txt_1"):setPosition(-335, 140)   --200
+    self.sliderNode_ = cc.CSLoader:createNode("friend/SliderNode.csb")
+    self.facebookView_:getChildByName("node_slider"):addChild(self.sliderNode_)
+    self.sliderNode_:setVisible(false)
+    self.slider_ = self.sliderNode_:getChildByName("root"):getChildByName("slider")
+    self.slider_:setPercent(0)
+
+    self.bg_bottom_ = self.facebookView_:getChildByName("bg_bottom")  
+    local btn_send = self.bg_bottom_:getChildByName("btn_send")
+    btn_send:addTouchEventListener(handler(self, self.touchEvent))
+    local checkBox = self.bg_bottom_:getChildByName("input"):getChildByName("CheckBox_all")
+    checkBox:addTouchEventListener(handler(self, self.checkBoxEvent))
+    self.bg_bottom_:setVisible(false)
+    
+    self.btn_connctFB_ = self.facebookView_:getChildByName("btn_connctFB")  
+    self.btn_connctFB_:addTouchEventListener(handler(self, self.touchEvent))
+    self.btn_connctFB_:setVisible(true)
+
+    self.fb_title_ = self.facebookView_:getChildByName("facebook_bg"):getChildByName("fb_title")  
+    self.fb_title_:getChildByName("panel_no_fb"):setVisible(true)
+    self.fb_title_:getChildByName("panel_fb"):setVisible(false)
+
 end
 
-function FriendInvietLayer:initFreindPanel()
-    --TODO
+function FriendInvietLayer:initTableView()
+    self.m_tableView = cc.TableView:create( cc.size(1130.00, 380.00) )
+    --TabelView添加到PanleMain  
+    self.fbFriendViewPanel_:addChild(self.m_tableView)
+    --设置滚动方向  
+    self.m_tableView:setDirection(cc.SCROLLVIEW_DIRECTION_VERTICAL)      
+    --竖直从上往下排列  
+    self.m_tableView:setVerticalFillOrder(cc.TABLEVIEW_FILL_TOPDOWN) 
+    --设置代理  
+    self.m_tableView:setDelegate() 
+    self.tableCellNum_  = 0
+
+    local function scrollViewDidScroll(view)
+        self.tableViewScroll_ = true
+    end
+
+    local function cellSizeForTable(view, idx)
+        return 0, 150
+    end
+
+    local function tableCellAtIndex(view, idx)
+        local index = idx + 1
+        local cell = view:dequeueCell()
+
+        local popItem = nil;  
+        if nil == cell then  
+            cell = cc.TableViewCell:new();  
+            --创建列表项  
+            local popItem = ccui.Layout:create()
+            self:refrushTableView(popItem, index);
+            popItem:setContentSize(1130 , 150)
+            popItem:setPosition(cc.p(0, 0));  
+            popItem:setTag(123);  
+            cell:addChild(popItem);  
+        else  
+            popItem = cell:getChildByTag(123);  
+            self:refrushTableView(popItem, index);  
+        end  
+        return cell
+    end
+
+    local function numberOfCellsInTableView(view)
+        return self.tableCellNum_
+    end
+
+    local function tableCellTouched(view, cell)
+        
+    end
+
+    self.m_tableView:registerScriptHandler( scrollViewDidScroll,cc.SCROLLVIEW_SCRIPT_SCROLL);           --滚动时的回掉函数  
+    self.m_tableView:registerScriptHandler( cellSizeForTable, cc.TABLECELL_SIZE_FOR_INDEX);             --列表项的尺寸  
+    self.m_tableView:registerScriptHandler( tableCellAtIndex, cc.TABLECELL_SIZE_AT_INDEX);              --创建列表项  
+    self.m_tableView:registerScriptHandler( numberOfCellsInTableView, cc.NUMBER_OF_CELLS_IN_TABLEVIEW); --列表项的数量  
+    self.m_tableView:registerScriptHandler( tableCellTouched, cc.TABLECELL_TOUCHED);
+
+    self.m_tableView:reloadData()
 end
 
-function FriendInvietLayer:createFriendPanel( data )
-    local widget = self.friendPanel_:clone()
-    widget:setVisible(true)
-
-    local headData = { name = data.name ,head_url = data.pictureUrl}
-    local head = bole:getNewHeadView(headData)
-    head:setScale(0.8)
-    head:updatePos(head.POS_FB_FRIEND)
-    widget:getChildByName("head"):addChild(head)
-    widget.id = data.id
-    --[[
-    local clipNode = cc.ClippingNode:create()
-    local mask = cc.Sprite:create("res/friend/mask.png")
-    clipNode:setAlphaThreshold(0)
-    clipNode:setStencil(mask)
-    clipNode:setScale(0.97)
-    local icon = cc.Sprite:create("res/friend/icon.png")
-    clipNode:addChild(icon)
-    widget:getChildByName("head"):addChild(clipNode)
-    widget.id = id
-    widget.icon = icon
-    widget.name = widget:getChildByName("name")
-    if data ~= nil then
-        if data.name ~= nil then
-            widget.name:setString(data.name)
+function FriendInvietLayer:refrushTableView(item,index)
+    for i = 1, 5 do
+        local friendCell = item:getChildByName("friendCell" .. i)
+        local data = self.fbFriendInfo_[(index - 1) * 5 + i]
+        if data == nil then
+            if friendCell ~= nil then
+                friendCell:setVisible(false)
+            end
+        else
+            if friendCell == nil then
+                friendCell = self:refurshFriendCell(friendCell,data)
+                item:addChild(friendCell)
+                friendCell:setName("friendCell" .. i)
+                friendCell:setPosition((i - 1) * 230 + 10, 20)
+            else
+                self:refurshFriendCell(friendCell,data)
+            end
+            friendCell:setVisible(true)
         end
     end
-    --]]
-    --widget.name:setString(data.name)
-    return widget
+
 end
 
-function FriendInvietLayer:initView()
-    local input = self.view_:getChildByName("input") 
-    self:createEditBox(input)
-    self.noFriendBg_ = self.view_:getChildByName("noF_bg")
-    self.noFriendBg_:setVisible(false)
+function FriendInvietLayer:refurshFriendCell(cell,data)
+    local headData = { name = data.name ,head_url = data.pictureUrl}
+    if cell == nil then
+        cell = self.friendPanel_:clone()
+        local head = bole:getNewHeadView(headData)
+        head:setScale(0.95)
+        head.Img_headbg:setTouchEnabled(false)
+        head:updatePos(head.POS_FB_FRIEND)
+        head:setSwallow(false)
+        head:setName("headNode")
+        cell:getChildByName("head"):addChild(head)
+    else
+        cell:getChildByName("head"):getChildByName("headNode"):updateInfo(headData)
+    end
+    cell:setVisible(true)
+    cell.id = data.id
+    cell:getChildByName("CheckBox"):setSelected(false)
+    --dump(self.fbFriendIdList_,"self.fbFriendIdList_")
+    if self.fbFriendIdList_[data.id] ~= nil then
+        if self.fbFriendIdList_[data.id] == 1 then
+            cell:getChildByName("CheckBox"):setSelected(true)
+        end
+    end
+    return cell
+end
 
-    self.scrollView_ = self.view_:getChildByName("ScrollView") 
-    self.slider_ = self.view_:getChildByName("Slider") 
+function FriendInvietLayer:refreshFacebookView()
+    self.fbFriendViewPanel_:setVisible(false)
+    self.scrollViewMask_:setVisible(false)
+    self.fb_title_:getChildByName("panel_no_fb"):setVisible(true)
+    self.fb_title_:getChildByName("panel_fb"):setVisible(false)
+    self.btn_connctFB_:setVisible(true)
+    self.noFriendBg_:setVisible(true)
+    self.noFriendBg_:getChildByName("txt_1"):setPosition(-335, 140)
+    self.bg_bottom_:setVisible(false)
 
-    local btn_send = self.view_:getChildByName("send")
-    btn_send:addTouchEventListener(handler(self, self.touchEvent))
+    --已经绑定fb 
+    if self.facebookCenter_.fbId ~= nil then
+        self.fb_title_:getChildByName("panel_no_fb"):setVisible(false)
+        self.fb_title_:getChildByName("panel_fb"):setVisible(true)  
+        self.btn_connctFB_:setVisible(false)  
+        self.noFriendBg_:getChildByName("txt_1"):setPosition(-335, 200)
+        self.noFriendBg_:getChildByName("txt_1"):setString("You have no Facebook friends yet.")
+    end
+    bole:getFacebookCenter():getInvitableFriends(function(data) self:refreshInvitaInfo(data)  end)
+    self:refreshInvitaInfo(data)
 end
 
 function FriendInvietLayer:refreshInvitaInfo(data)
-    print("---------------------mk--------------------------")
-    self.fbFriendInfo_ = data
-    dump(self.fbFriendInfo_,"self.fbFriendInfo_")
-    self.scrollView_:addEventListener(handler(self, self.scrollViewEvent))
-    self.scrollView_:setScrollBarOpacity(0)
-    if self.fbFriendInfo_ ~= nil then
-        self:refreshFriendView(self.fbFriendInfo_)
+    self.fbFriendInfo_ = data or {}
+    --[[
+    for i = 1, 51 do
+        table.insert(self.fbFriendInfo_,{ name = "123123123" ,head_url = "1321213" , id = i })
     end
-end
-
-
-function FriendInvietLayer:refreshFriendView(data)
-    self.scrollView_:removeAllChildren()
-    --test
-    self.showNum_ = # data
-    for i = 1, self.showNum_  do
-        local widget = self:createFriendPanel(data[i])
-        self.scrollView_:addChild(widget)
-        if i % 3 == 0 then
-            widget:setPosition(cc.p( math.ceil(i / 3) * 365 - 350, 0))
-        elseif i % 3 == 1 then
-            widget:setPosition(cc.p( math.ceil(i / 3) * 365 - 350, 260))
-        elseif i % 3 == 2 then
-            widget:setPosition(cc.p( math.ceil(i / 3) * 365 - 350, 130))
+    --]]
+    dump(self.fbFriendInfo_,"self.fbFriendInfo_")
+    if self.fbFriendInfo_ ~= nil then
+        self.tableCellNum_ = math.ceil( # self.fbFriendInfo_ / 5 )
+        for k ,v in pairs(self.fbFriendInfo_) do
+            self.fbFriendIdList_[v.id] = 0
+        end
+        if # self.fbFriendInfo_ ~= 0 then
+            self.fb_title_:getChildByName("panel_no_fb"):setVisible(false)
+            self.fb_title_:getChildByName("panel_fb"):setVisible(true)  
+            self.btn_connctFB_:setVisible(false)  
+            self.noFriendBg_:getChildByName("txt_1"):setPosition(-335, 200)
+            self.fbFriendViewPanel_:setVisible(true)
+            self.scrollViewMask_:setVisible(true)
+            self.noFriendBg_:setVisible(false)
+            self.bg_bottom_:setVisible(true)
         end
     end
-    self.scrollView_:setInnerContainerSize(cc.size( math.ceil(self.showNum_  / 3) * 365, 390))
-    self.scrollView_:scrollToBottom(0,true)
-    self.scrollViewScrollMaxLenght_ = self.scrollView_:getInnerContainerSize().width -  self.scrollView_:getContentSize().width
-end
-
-function FriendInvietLayer:createEditBox(parentWidget)
-    local inputBg = parentWidget:getChildByName("inputBg")
-    local size = inputBg:getContentSize()
-    local posX,posY = inputBg:getPosition()
-    parentWidget:getChildByName("text"):setVisible(false)
-    inputBg:setVisible(false)
-
-    self.editBox_ = ccui.EditBox:create(size,"res/friend/MF_searchINPUT.png")
-    self.editBox_:setAnchorPoint(0,0)
-    self.editBox_:setFontSize(26)
-    self.editBox_:setPlaceholderFontSize(26)
-    self.editBox_:setFontName("res/font/FZKTJW.TTF")
-    self.editBox_:setPlaceholderFontName("res/font/FZKTJW.TTF")
-    self.editBox_:setFontColor(cc.c3b(111,122,152))
-    self.editBox_:setPlaceholderFontColor(cc.c3b(111,122,152))
-    self.editBox_:setPlaceHolder("Input Player ID")
-    self.editBox_:setInputMode(cc.EDITBOX_INPUT_MODE_SINGLELINE)
-    self.editBox_:setMaxLength(FriendInvietLayer.MaxInputLenght)
-    self.editBox_:setPosition(0,0)
-    self.editBox_:setReturnType(cc.KEYBOARD_RETURNTYPE_DONE )
-    self.editBox_:registerScriptEditBoxHandler(handler(self, self.editBoxHandEvent))
-    parentWidget:getChildByName("inputPanel"):addChild(self.editBox_)
-
-    parentWidget:getChildByName("btn_search"):addTouchEventListener(handler(self, self.touchEvent))
-    parentWidget:getChildByName("btn_input_close"):addTouchEventListener(handler(self, self.touchEvent))
-    parentWidget:getChildByName("CheckBox"):addTouchEventListener(handler(self, self.checkBoxEvent))
+    self.m_tableView:reloadData()
 end
 
 function FriendInvietLayer:touchEvent(sender, eventType)
@@ -158,97 +227,85 @@ function FriendInvietLayer:touchEvent(sender, eventType)
         sender:runAction(cc.ScaleTo:create(0.1, 1, 1))
         if name == "btn_close" then
             self:closeUI()
-        elseif name == "send" then
+        elseif name == "btn_send" then
             self:send()
         elseif name == "btn_search" then
             self:searchId()
             print("btn_search")
         elseif name == "btn_input_close" then
             print("btn_input_close")
+        elseif name == "btn_connctFB" then
+            bole:getFacebookCenter():bindFacebook()
         end
     elseif eventType == ccui.TouchEventType.canceled then
         sender:runAction(cc.ScaleTo:create(0.1, 1, 1))
     end
 end
 
-function FriendInvietLayer:searchId()
-    local showId = {}
-    local id = self.editBox_:getText()
-
-    if id == "" then
-        bole:popMsg({msg ="未找到该玩家" , title = "Search Friend" })
-        return
-    end
-
-    for k ,v in pairs( self.fbFriendInfo_) do
-        if string.find(v.name, id) ~= nil then
-            print(v.name .. "      " ..  string.find(v.name, id))
-            table.insert(showId , # showId + 1, v)
-        end
-    end
-
-    dump(showId,"showId")
-
-    if # showId ~= 0 then
-        self:refreshFriendView(showId)
-    else
-        bole:popMsg({msg ="未找到该玩家" , title = "Search Friend" })
-    end
-end
-
-function FriendInvietLayer:scrollViewEvent(sender,eventType)
-    if eventType == 9 then
-        local nowX = - self.scrollView_:getInnerContainerPosition().x 
-        local posX = math.min( math.max(0 , nowX) , self.scrollViewScrollMaxLenght_)
-        self.slider_:setPercent(posX / self.scrollViewScrollMaxLenght_ * 100)
-    end
+function FriendInvietLayer:refreshFBFriendView()
+    self.fb_title_:getChildByName("panel_no_fb"):setVisible(false)
+    self.fb_title_:getChildByName("panel_fb"):setVisible(true)  
+    self.btn_connctFB_:setVisible(false)  
+    self.noFriendBg_:getChildByName("txt_1"):setPosition(-335, 200)
+    bole:getFacebookCenter():getInvitableFriends(function(data) self:refreshInvitaInfo(data)  end)
+    bole:popMsg({msg = "connect Facebook success", title = "success", cancle = false})
 end
 
 function FriendInvietLayer:checkBoxEvent(sender,eventType)
+    local name = sender:getName()
     if eventType == ccui.TouchEventType.began then
 
     elseif eventType == ccui.TouchEventType.moved then
 
     elseif eventType == ccui.TouchEventType.ended then
         local isSelected = sender:isSelected()
-        for k,v in pairs(self.scrollView_:getChildren()) do
-            local checkBox = v:getChildByName("CheckBox")
-            if checkBox then
-                checkBox:setSelected(isSelected)
-            end
-         end
+        if name == "CheckBox_all" then
+            local posY = self.m_tableView:getContentOffset().y
+            self:setFbFreindChoose(isSelected)
+            self.m_tableView:reloadData()
+            self.m_tableView:setContentOffset(cc.p(0,posY))
+        else
+            sender:setSelected(isSelected)
+            print(sender:getParent().id)
+            self:setFbFreindChoose(isSelected,sender:getParent().id)
+        end
     elseif eventType == ccui.TouchEventType.canceled then
         sender:setSelected(not sender:isSelected())
     end
 end
 
-function FriendInvietLayer:editBoxHandEvent(eventName,sender)
-    if eventName == "began" then
-
-    elseif eventName == "ended" then
-
-    elseif eventName == "return" then
-
-    elseif eventName == "changed" then
-
+function FriendInvietLayer:setFbFreindChoose(bool,id)
+    if id == nil then
+        if bool then  
+            for k ,v in pairs(self.fbFriendIdList_) do
+                self.fbFriendIdList_[k] = 1
+            end
+        else
+            for k ,v in pairs(self.fbFriendIdList_) do
+                self.fbFriendIdList_[k] = 0
+            end
+        end
+    else
+        if bool then
+            self.fbFriendIdList_[id] = 1
+        else
+            self.fbFriendIdList_[id] = 0
+        end
     end
 end
 
 function FriendInvietLayer:send()
 
     local inviteId = {}
-     for k,v in pairs(self.scrollView_:getChildren()) do
-         local checkBox = v:getChildByName("CheckBox")
-         if checkBox:isSelected() then
-            table.insert(inviteId, # inviteId + 1 ,v.id)
-         end
-    end 
-    dump(inviteId,"inviteId")
-    bole:getFacebookCenter():inviteOneFriend(inviteId)
-end
 
-function FriendInvietLayer:onExit()
-    
+    for k , v in pairs(self.fbFriendIdList_) do
+        if self.fbFriendIdList_[k] == 1 then
+            table.insert(inviteId ,k)
+        end
+    end
+    dump(inviteId,"inviteId")
+
+    bole:getFacebookCenter():inviteOneFriend(inviteId)
 end
 
 function FriendInvietLayer:adaptScreen()

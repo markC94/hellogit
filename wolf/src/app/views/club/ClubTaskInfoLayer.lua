@@ -1,19 +1,22 @@
 --region *.lua
 --Date
 --此文件由[BabeLua]插件自动生成
-
+--0126
 local ClubTaskInfoLayer = class("ClubTaskInfoLayer", cc.load("mvc").ViewBase)
 
 function ClubTaskInfoLayer:onCreate()
     print("ClubTaskInfoLayer-onCreate")
     local root = self:getCsbNode():getChildByName("root")
+    self.root_ = root
     self.topPanel_ = self:getCsbNode():getChildByName("topPanel")
+    self.topPanel_:setVisible(true)
+
     self.top_ = root:getChildByName("top")
-    self.listView_ = root:getChildByName("ListView")
-    self.listView_:addEventListener(handler(self, self.scrollViewEvent))
+    self.tableView_panel_ = root:getChildByName("ListView1")
 
     local btn_close = root:getChildByName("btn_close")
     btn_close:addTouchEventListener(handler(self, self.touchEvent))
+
 
     self:adaptScreen()
 end
@@ -35,7 +38,7 @@ function ClubTaskInfoLayer:initClubTaskInfoLayer(data)
     end
     self:initShowInfo()
     self:initTop()
-    self:initListView()
+    self:initTableView()
 end
 
 function ClubTaskInfoLayer:initShowInfo()
@@ -64,129 +67,244 @@ function ClubTaskInfoLayer:initTop()
     local topBg = self.top_:getChildByName("topBg")
     local theme_icons = { "oz_icon", "farm_icon", "elvis_icon","dragon_icon","sea_icon","chilli_icon","temple_icon" }
     local theme = topBg:getChildByName("theme")
-    theme:loadTexture("res/theme_icon/" .. theme_icons[self.taskInfo_.theme_id] .. ".png")
+    theme:loadTexture("theme_icon/" .. theme_icons[self.taskInfo_.theme_id] .. ".png")
 
-    topBg:getChildByName("title"):setString(self.taskInfo_.titleStr)
+    local num_coins = topBg:getChildByName("num_coins")
+    num_coins:setString(bole:formatCoins(self.taskInfo_.stageTotal,25))
+    local posX = num_coins:getPositionX() + num_coins:getContentSize().width + 8
+    topBg:getChildByName("txt3"):setPosition(posX,146)
 
-    topBg:getChildByName("bar_cell"):setPercent(tonumber(self.taskInfo_.stageAmount) / tonumber(self.taskInfo_.stageTotal) * 100)
+    topBg:getChildByName("slider"):setPercent(tonumber(self.taskInfo_.amount) / tonumber(self.taskInfo_.total) * 100)
 
+    self.timeEnd_ = topBg:getChildByName("time_bg") 
+    self.unit_1 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_1") 
+    self.unit_2 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_2") 
+    self.time_1 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_m") 
+    self.time_2 = self.timeEnd_:getChildByName("panel_time"):getChildByName("time_s") 
+    local clockAct = sp.SkeletonAnimation:create("shop_act/biao_1.json", "shop_act/biao_1.atlas")
+    clockAct:setScale(0.42)
+    clockAct:setAnimation(0, "animation", true)
+    self.timeEnd_:getChildByName("panel_time"):getChildByName("node_act"):addChild(clockAct)
+    self.timeEnd_:getChildByName("panel_end"):setVisible(false)
     if self.taskInfo_.leave ~= nil then
-        topBg:getChildByName("txt_time"):setString("ends in: " .. bole:timeFormat(self.taskInfo_.leave))
+        --topBg:getChildByName("txt_time"):setString("ends in: " .. bole:timeFormat(self.taskInfo_.leave))
+        self:setTime(self.taskInfo_.leave)
         if self.scheduler_ == nil then
             local function update()
+                self:setTime(self.taskInfo_.leave)
                 self.taskInfo_.leave = self.taskInfo_.leave - 1
             end
             self.scheduler_ = cc.Director:getInstance():getScheduler():scheduleScriptFunc(update, 1, false)
          end
     else
-        topBg:getChildByName("txt_time"):setString("ended")
+        self.timeEnd_:getChildByName("panel_time"):setVisible(false)
+        self.timeEnd_:getChildByName("panel_end"):setVisible(true)
+        if self.scheduler_ then
+            cc.Director:getInstance():getScheduler():unscheduleScriptEntry(self.scheduler_)
+            self.scheduler_ = nil
+        end
     end
-
-
 
     if self.taskInfo_.stage == 1 then
-        topBg:getChildByName("sp_star1"):getChildByName("sp_star1_no"):setVisible(false)
-        topBg:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(false)
-        topBg:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(false)
+        topBg:getChildByName("panel_star"):getChildByName("star_1"):setVisible(false)
+        topBg:getChildByName("panel_star"):getChildByName("star_2"):setVisible(false)
+        topBg:getChildByName("panel_star"):getChildByName("star_3"):setVisible(false)
     elseif self.taskInfo_.stage == 2 then
-        topBg:getChildByName("sp_star2"):getChildByName("sp_star2_no"):setVisible(false)
-        topBg:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(false)
+        topBg:getChildByName("panel_star"):getChildByName("star_2"):setVisible(false)
+        topBg:getChildByName("panel_star"):getChildByName("star_3"):setVisible(false)
     elseif self.taskInfo_.stage == 3 then
-        topBg:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(false)
+        topBg:getChildByName("panel_star"):getChildByName("star_3"):setVisible(false)
         if self.taskInfo_.finish then
-            topBg:getChildByName("sp_star3"):getChildByName("sp_star3_no"):setVisible(true)
-            topBg:getChildByName("isCom"):setVisible(true)
+            topBg:getChildByName("panel_star"):getChildByName("star_3"):setVisible(true)
+            theme:getChildByName("com"):setVisible(true)
         else
-            topBg:getChildByName("isCom"):setVisible(false)
+            theme:getChildByName("com"):setVisible(false)
         end
     end
 
+    self.barlight_ = cc.Sprite:create("loadImage/club_event_info_progressba_light.png")  
+    local clipNode = cc.ClippingNode:create()
+    clipNode:setAnchorPoint(0.5,0.5)
+    clipNode:setAlphaThreshold(0)
+    clipNode:setStencil(cc.Sprite:create("loadImage/club_event_info_progressba.png"))
+    topBg:getChildByName("slider_top"):addChild(clipNode)  
+    clipNode:addChild(self.barlight_)
+    self.barlight_:setAnchorPoint(1,0.5)
+    self.barlight_:setPosition(tonumber(self.taskInfo_.amount) / tonumber(self.taskInfo_.total) * 672 - 336,0)
 end
 
-function ClubTaskInfoLayer:initListView()
-    self.listView_:removeAllChildren()
-    self.topNum_ = # self.showList_
-    self.showNum_ = math.min(self.topNum_, 10)
-    for i = 1, self.showNum_ do
-        local cell = self:createTopPanel(self.showList_[i])
-        local topIcon = cell:getChildByName("topIcon")
-        local rank = cell:getChildByName("rank")
-        if i == 1 then
-            topIcon:loadTexture("res/club/goldCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        elseif i == 2 then
-            topIcon:loadTexture("res/club/silverCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        elseif i == 3 then
-            topIcon:loadTexture("res/club/copperCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        else
-            topIcon:setVisible(false)
-            rank:setVisible(true)
-            rank:setString(i)
-        end
-        cell:setTag(i)
-        self.listView_:addChild(cell)
-        cell:setPosition(0, math.max(self.showNum_ * 100,455) - 100 * i)
-    end
-    self.listView_:setInnerContainerSize(cc.size(970, math.max(self.showNum_ * 100,455)))
-    --[[
-    local top = 0
-    for i = 1, # self.taskInfo_.top do
-        top = top + 1
-        local cell = self:createTopPanel(self.taskInfo_.top[i])
-        local topIcon = cell:getChildByName("topIcon")
-        local rank = cell:getChildByName("rank")
-        if top == 1 then
-            topIcon:loadTexture("res/club/goldCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        elseif top == 2 then
-            topIcon:loadTexture("res/club/silverCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        elseif top == 3 then
-            topIcon:loadTexture("res/club/copperCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        else
-            topIcon:setVisible(false)
-            rank:setVisible(true)
-            rank:setString(top)
-        end
+function ClubTaskInfoLayer:setTime(time)
+    if time > 0 then
+        local s = math.floor(time) % 60
+        local m = math.floor(time / 60) % 60
+        local h = math.floor(time / 3600) % 24
 
-        cell:setTag(i)
-        self.listView_:pushBackCustomItem(cell)
-    end
-    
-    for i = 1, # self.usersInfo_ do
-        top = top + 1
-        local cell = self:createTopAddPanel(self.usersInfo_[i])
-        local topIcon = cell:getChildByName("topIcon")
-        local rank = cell:getChildByName("rank")
-        if top == 1 then
-            topIcon:loadTexture("res/club/goldCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        elseif top == 2 then
-            topIcon:loadTexture("res/club/silverCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
-        elseif top == 3 then
-            topIcon:loadTexture("res/club/copperCrown.png")
-            topIcon:setVisible(true)
-            rank:setVisible(false)
+        if h == 0 then
+            self.unit_1:setString("M")
+            self.unit_2:setString("S")
+            self.time_1:setString(m)
+            self.time_2:setString(s)
         else
+            self.unit_1:setString("H")
+            self.unit_2:setString("M")
+            self.time_1:setString(h)
+            self.time_2:setString(m)
+        end
+    else
+        self.timeEnd_:getChildByName("panel_time"):setVisible(false)
+        self.timeEnd_:getChildByName("panel_end"):setVisible(true)
+        if self.scheduler_ then
+            cc.Director:getInstance():getScheduler():unscheduleScriptEntry(self.scheduler_)
+            self.scheduler_ = nil
+        end
+    end
+end
+
+function ClubTaskInfoLayer:initTableView()
+    self.m_tableView = cc.TableView:create( cc.size(940, 385))
+    --TabelView添加到PanleMain  
+    self.tableView_panel_:addChild(self.m_tableView);  
+    --self.m_tableView:setPosition(0 , 0);  
+    --设置滚动方向  
+    self.m_tableView:setDirection(cc.SCROLLVIEW_DIRECTION_VERTICAL)      
+    --竖直从上往下排列  
+    self.m_tableView:setVerticalFillOrder(cc.TABLEVIEW_FILL_TOPDOWN);  
+    --设置代理  
+    self.m_tableView:setDelegate();  
+
+    self.m_tableView:registerScriptHandler( handler(self, self.scrollViewDidScroll),cc.SCROLLVIEW_SCRIPT_SCROLL);           --滚动时的回掉函数  
+    self.m_tableView:registerScriptHandler( handler(self, self.cellSizeForTable), cc.TABLECELL_SIZE_FOR_INDEX);             --列表项的尺寸  
+    self.m_tableView:registerScriptHandler( handler(self, self.tableCellAtIndex), cc.TABLECELL_SIZE_AT_INDEX);              --创建列表项  
+    self.m_tableView:registerScriptHandler( handler(self, self.numberOfCellsInTableView), cc.NUMBER_OF_CELLS_IN_TABLEVIEW); --列表项的数量  
+    self.m_tableView:registerScriptHandler( handler(self, self.tableCellTouched), cc.TABLECELL_TOUCHED);
+
+    self.m_tableView:reloadData()
+end
+
+function ClubTaskInfoLayer:tableCellTouched(view, cell)
+    
+end
+
+function ClubTaskInfoLayer:scrollViewDidScroll(view)
+    
+end
+
+function ClubTaskInfoLayer:cellSizeForTable(view, idx)
+    return 0, 100
+end
+
+function ClubTaskInfoLayer:numberOfCellsInTableView(view)
+    return  # self.showList_
+end
+
+function ClubTaskInfoLayer:tableCellAtIndex(view, idx)
+    local index = idx + 1
+    local cell = view:dequeueCell()
+
+    local popItem = nil;  
+    if nil == cell then  
+        cell = cc.TableViewCell:new();  
+        --创建列表项  
+        local popItem = self.topPanel_:clone(); 
+        self.topPanel_:setVisible(true)
+        self:refrushTopView(popItem, index) 
+        popItem:setPosition(cc.p(0, 0));  
+        popItem:setTag(123);  
+        cell:addChild(popItem);  
+    else  
+        popItem = cell:getChildByTag(123);  
+        self:refrushTopView(popItem, index);  
+    end  
+    return cell
+end
+
+function ClubTaskInfoLayer:refrushTopView(popItem, index)
+    local headPanel = popItem:getChildByName("head")
+    local headNode = headPanel:getChildByName("headNode")
+    local rank = popItem:getChildByName("rank")
+    local topIcon = popItem:getChildByName("topIcon")
+    local coins = popItem:getChildByName("coins")
+    local title = popItem:getChildByName("title")
+    rank:setString(index)
+
+    local data = self.showList_[index]
+    local userData = nil
+    local titleType = 3
+    if data.club_title == nil then
+        if data.info ~= nil then
+            userData = data.info
+            titleType = data.info.club_title
+        else
+            userData = { user_id = data[1], name = info[1], icon = info[2] , level = info[3], country = info[4] }
+        end
+        coins:setString(bole:formatCoins(tonumber(data[2]), 5))
+    else
+        userData = data
+        titleType = data.club_title
+        coins:setString(0)
+    end
+
+    if headNode == nil then
+        print(index .. " noheadNode")
+        local headNode = bole:getNewHeadView(userData)
+        headNode:setScale(0.7)
+        headNode:setSwallow(true)
+        headNode:updatePos(headNode.POS_CLUB_TASKINFO)
+        headPanel:addChild(headNode)
+        headNode:setName("headNode")
+    else
+        headNode:updateInfo(userData)
+    end
+
+    if index == 1 then
+        if not topIcon:isVisible() then
+            topIcon:loadTexture("loadImage/crown_gold.png")
+            topIcon:setVisible(true)
+            rank:setVisible(false)
+        end
+    elseif index == 2 then
+        if not topIcon:isVisible() then
+            topIcon:loadTexture("loadImage/crown_silver.png")
+            topIcon:setVisible(true)
+            rank:setVisible(false)
+        end
+    elseif index == 3 then
+        if not topIcon:isVisible() then
+            topIcon:loadTexture("loadImage/crown_copper.png")
+            topIcon:setVisible(true)
+            rank:setVisible(false)
+        end
+    else
+        if not rank:isVisible() then
             topIcon:setVisible(false)
             rank:setVisible(true)
-            rank:setString(top)
         end
-        self.listView_:pushBackCustomItem(cell)
     end
-    --]]
+
+    if titleType == 1 then
+        title:setString("Leader")
+        --title:setTextColor( { r = 204, g = 152, b = 127 })
+    elseif titleType == 3 or titleType == 0 then
+        title:setString("Member")
+        --title:setTextColor( { r = 39, g = 174, b = 23 })
+    elseif titleType == 2 then
+        title:setString("Co_leader")
+        --title:setTextColor( { r = 52, g = 189, b = 255 })
+    end
+
+    if index % 2 == 1 then
+        popItem:getChildByName("bg1"):setVisible(true)
+        popItem:getChildByName("bg2"):setVisible(false)
+    else
+        popItem:getChildByName("bg1"):setVisible(false)
+        popItem:getChildByName("bg2"):setVisible(true)
+    end
+
+    if userData.user_id == bole:getUserDataByKey("user_id") then
+        popItem:getChildByName("bg3"):setVisible(true)
+    else
+        popItem:getChildByName("bg3"):setVisible(false)
+    end
 end
 
 function ClubTaskInfoLayer:createTopPanel(data)
@@ -219,7 +337,7 @@ function ClubTaskInfoLayer:createTopPanel(data)
             cell:getChildByName("coins"):setString(bole:formatCoins(tonumber(data[2]), 5))
         else
             local info = require("json").decode(data[3])
-            head = bole:getNewHeadView({ user_id = data[1], name = info[1], level = info[2], country = info[3] })
+            head = bole:getNewHeadView({ user_id = data[1], name = info[1], icon = info[2] , level = info[3], country = info[4] })
             head:setScale(0.7)
             head:setSwallow(true)
             head.Img_headbg:setTouchEnabled(false)
@@ -251,133 +369,10 @@ function ClubTaskInfoLayer:createTopPanel(data)
             end
             cell:getChildByName("coins"):setString(0)
 
-
     end
 
-
-
-
-   
-   --[[
-    if data.info ~= nil then
-        local head = bole:getNewHeadView(data.info)
-        head:setScale(0.7)
-        head:setSwallow(true)
-        head.Img_headbg:setTouchEnabled(false)
-        head:updatePos(head.POS_CLUB_REQUEST)
-        cell:getChildByName("head"):addChild(head)
-
-        if tonumber(data.info.club_title) == 1 then
-            cell:getChildByName("title"):setString("Leader")
-            cell:getChildByName("title"):setTextColor({ r = 204, g = 152, b = 127})
-            cell.club_title = 1
-        elseif tonumber(data.info.club_title) == 3 or tonumber(data.info.club_title) == 0 then
-            cell:getChildByName("title"):setString("Member")
-            cell:getChildByName("title"):setTextColor( { r = 39, g = 174, b = 23 })
-            cell.club_title = 3
-        elseif tonumber(data.info.club_title) == 2 then
-            cell:getChildByName("title"):setString("Co_leader")
-            cell:getChildByName("title"):setTextColor( { r = 52, g = 189, b = 255 })
-            cell.club_title = 2
-        end
-    else
-
-        local info = require("json").decode(data[3])
-        local head = bole:getNewHeadView({ user_id = data[1], name = info[1], level = info[2], country = info[3] })
-
-        head:setScale(0.7)
-        head:setSwallow(true)
-        head.Img_headbg:setTouchEnabled(false)
-        head:updatePos(head.POS_CLUB_REQUEST)
-        cell:getChildByName("head"):addChild(head)
-        cell:getChildByName("title"):setString("Member")
-    end
-    
-    cell:getChildByName("coins"):setString(bole:formatCoins(tonumber(data[2]), 5))
-    --]]
     return cell
 end
-
-function ClubTaskInfoLayer:createTopAddPanel(data)
-    local cell = self.topPanel_:clone()
-    cell:setVisible(true)
-    local head = bole:getNewHeadView(data)
-        head:setScale(0.7)
-        head:setSwallow(true)
-        head.Img_headbg:setTouchEnabled(false)
-        head:updatePos(head.POS_CLUB_REQUEST)
-        cell:getChildByName("head"):addChild(head)
-
-        if tonumber(data.club_title) == 1 then
-            cell:getChildByName("title"):setString("Leader")
-            cell:getChildByName("title"):setTextColor({ r = 204, g = 152, b = 127})
-            cell.club_title = 1
-        elseif tonumber(data.club_title) == 3 or tonumber(data.club_title) == 0 then
-            cell:getChildByName("title"):setString("Member")
-            cell:getChildByName("title"):setTextColor( { r = 39, g = 174, b = 23 })
-            cell.club_title = 3
-        elseif tonumber(data.club_title) == 2 then
-            cell:getChildByName("title"):setString("Co_leader")
-            cell:getChildByName("title"):setTextColor( { r = 52, g = 189, b = 255 })
-            cell.club_title = 2
-        end
-    cell:getChildByName("coins"):setString(0)
-    return cell
-end
-
-function ClubTaskInfoLayer:scrollViewEvent(sender, eventType)
-    if eventType == 4 then
-        local inner_pos = self.listView_:getInnerContainerPosition()
-        local addTop = false
-        if inner_pos.y > 50 then
-            local addNum = math.min(10, self.topNum_ - self.showNum_)
-            for i = self.showNum_ + 1, math.min(self.topNum_, self.showNum_ + 10) do
-                self.addPosY_ = inner_pos.y
-                addTop = true
-                self.showNum_ = self.showNum_ + 1
-               
-                local cell = self:createTopPanel(self.showList_[i])
-                local topIcon = cell:getChildByName("topIcon")
-                local rank = cell:getChildByName("rank")
-                if i == 1 then
-                    topIcon:loadTexture("res/club/goldCrown.png")
-                    topIcon:setVisible(true)
-                    rank:setVisible(false)
-                elseif i == 2 then
-                    topIcon:loadTexture("res/club/silverCrown.png")
-                    topIcon:setVisible(true)
-                    rank:setVisible(false)
-                elseif i == 3 then
-                    topIcon:loadTexture("res/club/copperCrown.png")
-                    topIcon:setVisible(true)
-                    rank:setVisible(false)
-                else
-                    topIcon:setVisible(false)
-                    rank:setVisible(true)
-                    rank:setString(i)
-                end
-                cell:setTag(i)
-                self.listView_:addChild(cell)
-                cell:setPosition(0, math.max(self.showNum_ * 100,455) - 100 * i)
-            end
-
-            if addTop then
-                local height = math.max(self.showNum_ * 100,455)
-                self.listView_:setInnerContainerSize(cc.size(970, height))
-                self.listView_:setInnerContainerPosition(cc.p(0, self.addPosY_ - addNum * 100))
-                local cellTable = self.listView_:getChildren()
-                for i = 1, # cellTable do
-                    local cell = cellTable[i]
-                    local tag = cell:getTag()
-                    cell:setPosition(0, height - 100 * tag)
-                end
-            end
-        end
-
-    end
-end
-
-
 
 function ClubTaskInfoLayer:touchEvent(sender, eventType)
     local name = sender:getName()

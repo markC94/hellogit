@@ -1,25 +1,27 @@
 
-local MyApp = class("MyApp", cc.load("mvc").AppBase)
-
-function MyApp:onCreate()
+local MyApp = class("MyApp")
+function MyApp:ctor()
+    if CC_SHOW_FPS then
+        cc.Director:getInstance():setDisplayStats(true)
+    end
     math.randomseed(os.time())
-    cc.loadLua("AppConfig")
+    self:onCreate()
+end
+function MyApp:onCreate()
+    -- ScrollView »¬¶¯ËÙ¶È
+--    local userDefault = cc.UserDefault:getInstance()
+--    userDefault:setFloatForKey("ScrollView_handleReleaseLogic_factor_time", 3)
+--    userDefault:setFloatForKey("ScrollView_handleReleaseLogic_factor_pos", 1.5)
+--    userDefault:setFloatForKey("ScrollView_MOVEMENT_FACTOR",0.95)
+--    userDefault:flush()
+
     cc.loadLua("ServerConfig")
     cc.loadLua("app.command.JniUtil")
-    --cc.loadLua("app.command.NetUtil")
-    bole:getUIManage():setApp(self)
-    bole:getAppManage():connectScoket()
+    bole.DownLoadThemes={}
     bole.headImgs={}
-    bole:getLoginControl():openLoginView()
-    cc.SpriteFrameCache:getInstance():addSpriteFrames("plist/Common.plist")
-    cc.SpriteFrameCache:getInstance():addSpriteFrames("plist/Head.plist")
-    cc.SpriteFrameCache:getInstance():addSpriteFrames("plist/Lobby.plist")
-    --bole:setUpdate(true)
-end
--- ä¿®æ”¹é»˜è®¤è·¯å¾„ viewé»˜è®¤è·¯å¾„
-function MyApp:changeConfig(config)
-    config = config or self.configs_
-    self.configs_.viewsRoot = config.viewsRoot or self.configs_.viewsRoot
-    self.configs_.modelsRoot = config.modelsRoot or self.configs_.modelsRoot
+    bole.http_url_funcs={}
+    bole:getAppManage()
+    bole:getLoginControl():login()
+    bole:setUpdate(true)
 end
 return MyApp

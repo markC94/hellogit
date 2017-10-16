@@ -15,7 +15,9 @@ function FriendSearchLayer:onCreate()
     self:initSearch()
     self:adaptScreen()
 end
-
+function FriendSearchLayer:onKeyBack()
+   self:closeUI()
+end
 function FriendSearchLayer:onEnter()
     bole.socket:registerCmd("apply_for_friend", self.reApplyFriend, self)
     bole:addListener("initFrirndList", self.initFrirndList, self, nil, true)
@@ -28,7 +30,7 @@ end
 
 
 function FriendSearchLayer:initTop()
-    self.top_:getChildByName("title"):setString("Search Friends")
+    --self.top_:getChildByName("title"):setString("Search Friends")
     local btn_close = self.top_:getChildByName("btn_close")
     btn_close:addTouchEventListener(handler(self, self.touchEvent))
 end
@@ -40,11 +42,7 @@ function FriendSearchLayer:initSearch()
 
     local input = self.search_:getChildByName("input")
     input:addTouchEventListener(handler(self, self.editBoxTouchEvent))
-    local btn_close = input:getChildByName("btn_input_close")
-    btn_close:addTouchEventListener(handler(self, self.touchEvent))
-
     self.text_unFind_ = self.search_:getChildByName("text_unFind")
-
     self:createEditBox(input)
 end
 
@@ -54,7 +52,7 @@ function FriendSearchLayer:createEditBox(parentWidget)
     self.searchLabel_ = parentWidget:getChildByName("text")
     self.searchLabel_:setString("Input Player ID")
 
-    self.editBox_ = ccui.EditBox:create(cc.size(100,10) ,"res/friend/MF_searchINPUT.png")
+    self.editBox_ = ccui.EditBox:create(cc.size(100,10) ,"loadImage/editBox_bg.png")
     self.editBox_:setAnchorPoint(0,0)
     self.editBox_:setFontSize(0.001)
     self.editBox_:setInputMode(cc.EDITBOX_INPUT_MODE_DECIMAL)
@@ -63,7 +61,7 @@ function FriendSearchLayer:createEditBox(parentWidget)
     --self.editBox_:setScale(0.01)
     self.editBox_:setReturnType(cc.KEYBOARD_RETURNTYPE_DONE )
     self.editBox_:registerScriptEditBoxHandler(handler(self, self.editBoxHandEvent))
-    parentWidget:getChildByName("inputPanel"):addChild(self.editBox_)
+    self.root_:getChildByName("inputPanel"):addChild(self.editBox_)
 end
 
 
@@ -109,21 +107,24 @@ function FriendSearchLayer:editBoxHandEvent(eventName,sender)
             self.searchLabel_:setString("Input Player ID")
         end
     elseif eventName == "changed" then
-        self.searchLabel_:setString(sender:getText())
-        if self.searchLabel_:getString() == "" then
+        local searchId = sender:getText()
+        self.searchLabel_:setString(searchId)
+        if searchId ~= self.searchId_ then
+            self.text_unFind_:setString("")
+        end
+        if searchId == "" then
             self.searchLabel_:setString("Input Player ID")
         end
+        self.searchId_ = searchId
     end
 end
 
 function FriendSearchLayer:sendRequest()
     local id = self.editBox_:getText() 
-    for k ,v in pairs(self.friendsList_) do
-        if tonumber(id) == tonumber(v.user_id) then
-            self.text_unFind_:setVisible(true)
-            self.text_unFind_:setString("friend added")
-            return 
-        end
+    if bole:getFriendManage():isFriend( tonumber(id)) then
+        self.text_unFind_:setVisible(true)
+        self.text_unFind_:setString("the player is your friend")
+        return
     end
 
     if tonumber(id) == tonumber(bole:getUserDataByKey("user_id")) then
@@ -151,25 +152,33 @@ end
 
 function FriendSearchLayer:reApplyFriend(t, data)
     if t == "apply_for_friend" then
-        if data.success ~= nil then
             if data.success == 1 then
                 if data.new_friend.user_id == nil then
                     self.text_unFind_:setVisible(true)
-                    self.text_unFind_:setString("Couldnit find a player with the provided ID.")
+                    self.text_unFind_:setString("Couldn't find a player with the provided ID.")
                 else
-                    bole:postEvent("addFriend",{data.new_friend})
-                    local userFriendList = bole:getUserDataByKey("user_friends")
-                    table.insert(userFriendList, # userFriendList + 1, tonumber(data.user_id))
-                    bole:setUserDataByKey("user_friends", userFriendList)
+                    self.text_unFind_:setVisible(false)
+                    bole:getFriendManage():addFriend(data.new_friend)
+                    bole:getUIManage():openNewUI("FriendPopLayer",true,"friend","app.views.friend")
                     self:closeUI()
                 end
                 --发送消息
             end
-        end
+
         if data.error ~= nil then
-            if data.error == 1 then
-                 self.text_unFind_:setVisible(true)
-                 self.text_unFind_:setString("Couldnit find a player with the provided ID.")
+            self.text_unFind_:setVisible(true)
+            if data.error == 1 then  --没这个玩家
+                 self.text_unFind_:setString("Couldn't find a player with the provided ID.")
+            elseif data.error == 2 then  --没这个玩家
+                 self.text_unFind_:setString("Couldn't find a player with the provided ID.")
+            elseif data.error == 3 then  --已是好友
+                 self.text_unFind_:setString("the player is your friend")
+            elseif data.error == 4 then  --好友满了
+                 self.text_unFind_:setString("Player list is full")
+            elseif data.error == 5 then  --对方把你加了黑名单
+                 self.text_unFind_:setString("You can't add this player.")
+            else
+                self.text_unFind_:setString("error: " .. data.error)
             end
         end
     end

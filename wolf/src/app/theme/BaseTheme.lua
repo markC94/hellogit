@@ -42,52 +42,54 @@ local FRAME_CHILD_ORDER =
 
 cc.exports.THEME_CHILD_ORDER = THEME_CHILD_ORDER
 
-local THEMENAME = 
-{
-    "oz",
-    "farm",
-    "love",
-    "mermaid",
-    "sea",
-    "gorilla",
-    "jones"
-}
-
 local BaseTheme = class("BaseTheme", cc.Scene)
 function BaseTheme:ctor(themeId, app)
-    self.THEMENAME = THEMENAME
-    self.FRAME_CHILD_ORDER = FRAME_CHILD_ORDER
-
-    self.isDead = true
     self.themeId = themeId
     self.app = app
 
-    self:createLoadingView()
+    self.isAlive = true
+    self:enableNodeEvents()
+    bole:getBoleEventKey():addKeyBack(self)
+
+    self:onCheckThemeFiles()
 end
 
-function BaseTheme:createLoadingView()
-    local loadingView = bole:getEntity("app.views.spin.ThemeLoadingView", self)
+function BaseTheme:createDownloadView()
+    local downloadView = bole:getEntity("app.views.spin.ThemeDownloadView", self, self.onCreateLoadingView)
+    self:addChild(downloadView, THEME_CHILD_ORDER.DIALOG)
+end
+
+function BaseTheme:onCreateLoadingView(themeData)
+    local loadingView = bole:getEntity("app.views.spin.ThemeLoadingView", self, themeData)
     self:addChild(loadingView, THEME_CHILD_ORDER.DIALOG)
 end
 
-function BaseTheme:displayTheme(data)
-    local plistName = string.format("theme/theme%d/symbols.plist", self.themeId)
-    cc.SpriteFrameCache:getInstance():addSpriteFrames(plistName)
+function BaseTheme:onCheckThemeFiles()
+    local isUpdate = self.app:isThemeUpdated(self.themeId)
+    if isUpdate then
+        self:onCreateLoadingView()
+    else
+        self:createDownloadView()
+    end
+end
 
-    self.enterThemeData = data
+function BaseTheme:displayTheme(data)
+    self.isAlive = false
+    self:onEnter()
+
     self:initData(data)
     self:changeMatrix(101)
     self:genFalseReels()
     self:createChatCache()
     self:onCreateViews()
     self:addListeners()
-    self:enableNodeEvents()
-    self:onEnter()
     bole:getUIManage():addSpinEFF(self.themeId)
     bole:getAudioManage():initThemeAudio(self.themeId)
     bole:getMiniGameControl():initTheme(self.themeId)
-    bole:getAudioManage():playEff("start")
     self:setUpdate()
+    self:onFirstEnter(data)
+
+    self.isThemeDisplay = true
 end
 
 function BaseTheme:setUpdate()
@@ -126,11 +128,11 @@ function BaseTheme:setCachedRes(asynRes)
 end
 
 function BaseTheme:removeCachedRes()
+    cc.SpriteFrameCache:getInstance():removeSpriteFrameByName(self.app:getRes(self.themeId, "symbols.plist"))
     for _, key in ipairs(self.asyncImageWeights) do
         cc.Director:getInstance():getTextureCache():removeTextureForKey(key)
     end
-    local plistName = string.format("theme/theme%d/symbols.plist", self.themeId)
-    cc.SpriteFrameCache:getInstance():removeSpriteFrameByName(plistName)
+    cc.Director:getInstance():getTextureCache():removeUnusedTextures()
 end
 
 function BaseTheme:addOtherAsyncImage(weights)
@@ -149,11 +151,19 @@ function BaseTheme:addWaitEvent(name, duration, func)
 end
 
 function BaseTheme:onCreateTop(order)
-    self.top = bole:getEntity("app.views.spin.TopView", self, order)
+    bole:getEntity("app.views.spin.TopView", self, order)
 end
 
-function BaseTheme:onCreateBottom(order)
-    self.bottom = bole:getEntity("app.views.spin.BottomView", self, order)
+function BaseTheme:onCreateCommonBottom()
+    if self.bottom then
+        self.bottom:removeFromParent(true)
+    end
+    self.bottom = bole:getEntity("app.views.spin.BottomView", self, THEME_CHILD_ORDER.TOP, self.autoSpinning)
+end
+
+function BaseTheme:onCreateFreeSpinBottom()
+    self.bottom:removeFromParent(true)
+    self.bottom = bole:getEntity("app.views.spin.FreeSpinBottomView", self, THEME_CHILD_ORDER.TOP, self.freeSpinCount, self.freeSpinTotal, self.freeSpinCoins)
 end
 
 function BaseTheme:onCreateSpinView()
@@ -162,16 +172,7 @@ function BaseTheme:onCreateSpinView()
 end
 
 function BaseTheme:onCreateRoommateView(order)
-    self.roommateView = bole:getEntity("app.views.spin.RoommateView", self, self.roomInfo, order)
-end
-
-function BaseTheme:onCreateFreeSpinNode(x, y)
-    self.freeSpin = bole:getEntity("app.views.spin.FreeSpinNode", self, THEME_CHILD_ORDER.FREESPIN)
-    self:setFreeSpinPosition(x, y)
-end
-
-function BaseTheme:setFreeSpinPosition(x, y)
-    self.freeSpin:setPosition(x, y)
+    bole:getEntity("app.views.spin.RoommateView", self, self.roomInfo, order)
 end
 
 function BaseTheme:setIPADLRFrame(leftSp, rightSp, lPos, rPos)
@@ -185,7 +186,7 @@ function BaseTheme:onCreatePayTableView()
 end
 
 function BaseTheme:updateFrameTexture()
-    self.framBg:setTexture(string.format("theme/theme%s/%s.png", self.themeId, self.matrix.matrix_image))
+    self.framBg:setTexture(self.app:getRes(self.themeId, self.matrix.matrix_image, "png"))
 end
 
 function BaseTheme:setSpinBgPosition(node)
@@ -193,14 +194,11 @@ end
 
 function BaseTheme:onCreateViews()
     --大背景
-    local bgStr = string.format("theme/theme%s/%s.jpg", self.themeId, self.matrix.back_image)
-    local bg = cc.Sprite:create(bgStr)
-    self:addChild(bg, THEME_CHILD_ORDER.BG, THEME_CHILD_ORDER.BG)
-    bg:setPosition(display.cx, display.cy)
-
+    self.back_image = cc.Sprite:create(self.app:getRes(self.themeId, self.matrix.back_image, "png"))
+    self:addChild(self.back_image, THEME_CHILD_ORDER.BG, THEME_CHILD_ORDER.BG)
+    self.back_image:setPosition(display.cx, display.cy)
     --棋盘的背景
-    local spinBgNameStr = string.format("theme/theme%s/%s.png", self.themeId, self.matrix.matrix_image)
-    local spinBg = cc.Sprite:create(spinBgNameStr)
+    local spinBg = cc.Sprite:create(self.app:getRes(self.themeId, self.matrix.matrix_image, "png"))
     self:addChild(spinBg, THEME_CHILD_ORDER.SPIN, THEME_CHILD_ORDER.SPIN)
 --    local framePos = self.matrix.matrix_start
     local screenSize = cc.Director:getInstance():getWinSize()
@@ -212,15 +210,13 @@ function BaseTheme:onCreateViews()
     self.framBg = spinBg
 
     if bole.isPadScreen then
-        local leftSpStr = string.format("theme/theme%s/frame_left.png", self.themeId)
-        local leftSp = cc.Sprite:create(leftSpStr)
+        local leftSp = cc.Sprite:create(self.app:getRes(self.themeId, "frame_left.png"))
         self:addChild(leftSp, THEME_CHILD_ORDER.IPADEXTRA, THEME_CHILD_ORDER.IPADEXTRA)
         leftSp:setAnchorPoint(cc.p(1, 0.5))
 --        leftSp:setPosition(framePos.x - frameSize.width/2 + 13, framePos.y + 30)
         local lPos = {x = framePos.x - frameSize.width/2 + 13, y = framePos.y + 30}
 
-        local rightSpStr = string.format("theme/theme%s/frame_right.png", self.themeId)
-        local rightSp = cc.Sprite:create(rightSpStr)
+        local rightSp = cc.Sprite:create(self.app:getRes(self.themeId, "frame_right.png"))
         self:addChild(rightSp, THEME_CHILD_ORDER.IPADEXTRA, THEME_CHILD_ORDER.IPADEXTRA)
         rightSp:setAnchorPoint(cc.p(0, 0.5))
 --        rightSp:setPosition(framePos.x + frameSize.width/2 - 13, framePos.y + 30)
@@ -230,8 +226,7 @@ function BaseTheme:onCreateViews()
     end
 
     --遮挡的shader
-    local shadeBgNameStr = string.format("theme/theme%s/%s.png", self.themeId, "masking")
-    local shadeBg = cc.Sprite:create(shadeBgNameStr)
+    local shadeBg = cc.Sprite:create(self.app:getRes(self.themeId, "masking", "png"))
     shadeBg:setAnchorPoint(cc.p(0, 0))
     local stencil = cc.Node:create()
     stencil:addChild(shadeBg)
@@ -242,14 +237,16 @@ function BaseTheme:onCreateViews()
     clippingNode:setAlphaThreshold(0.9)
     self.spinViewNode = clippingNode
 
+    self:createOtherNodes(spinBg, FRAME_CHILD_ORDER)
     self:createAnimLayer(spinBg, FRAME_CHILD_ORDER.ANIMNODE, clipPos)
 
     self:onCreateTop(THEME_CHILD_ORDER.TOP)
-    self:onCreateBottom(THEME_CHILD_ORDER.BOTTOM)
+    self:onCreateCommonBottom()
     self:onCreateSpinView()
     self:onCreateRoommateView(THEME_CHILD_ORDER.ROOMMATE)
+end
 
-    self:onCreateFreeSpinNode(framePos.x, framePos.y + spinBg:getContentSize().height/2)
+function BaseTheme:createOtherNodes(spinBg, orderTable)
 end
 
 function BaseTheme:createAnimLayer(parentNode, order, pos)
@@ -271,26 +268,28 @@ function BaseTheme:onRemoveFixedSymbol(column, row)
 end
 
 function BaseTheme:onCreateFixedSymbol(column, row, id)
-    if not self.fixedSymbolLayer then
-        self.fixedSymbolLayer = self.spinView:createOneNode(self.spinView.SPINORDER.SYMBOL)
-    end
-
-    local sp = display.newSprite("#" .. self:getFrameNameById(id, true))
+    print(string.format("BaseTheme:onCreateFixedSymbol column=%d, row=%d, id=%s", column, row, id))
+    local sp = display.newSprite("#" .. self:getFrameNameById(id))
     local symbolSp = self:getSymbolNodeByPos(column, row)
-    local posX, posY = symbolSp:getPosition()
-    sp:setPosition(posX, posY)
-    self.fixedSymbolLayer:addChild(sp)
+    sp:setPosition(symbolSp:getPosition())
+    self.animNode:addChild(sp, 50+row)
 
     local key = string.format("%d_%d", column, row)
+    sp:setName("fixed_" .. key)
     self.fixedSymbol[key] = sp
 end
 
+function BaseTheme:getFixedNode(column, row)
+    return self.fixedSymbol[string.format("%d_%d", column, row)]
+end
+
 function BaseTheme:onClearFixedSymbolLayer()
-    if self.fixedSymbolLayer then
-        self.fixedSymbolLayer:removeFromParent(true)
-        self.fixedSymbolLayer = nil
-        self.fixedSymbol = {}
+    if table.empty(self.fixedSymbol) then return end
+
+    for _, node in pairs(self.fixedSymbol) do
+        node:removeFromParent(true)
     end
+    self.fixedSymbol = {}
 end
 
 function BaseTheme:getAnimLayer(isClipping)
@@ -305,28 +304,37 @@ function BaseTheme:getPromptNode()
     return self.spinView.promptSuccessNode
 end
 
-function BaseTheme:createAnimNode(column, row, key, loop, isHideSymbol, endCallback)
+function BaseTheme:createAnimNode(column, row, key, loop, isHideSymRunning, isHideAnimEnd, endCallback)
     local symbolId = self.stopReels[column][row]
-    local indexKey, animationName = self:getAnimName(symbolId, key)
-    print("createAnimNode id=" .. self.stopReels[column][row] .. ",column=" .. column .. ",row=" .. row .. ",key=" .. key)
-    local nodeList = self.cacheAnimNodes[indexKey]
+    print("createAnimNode id=" .. symbolId .. ",column=" .. column .. ",row=" .. row .. ",key=" .. key)
+    local indexKey, animationName, isCut = self:getAnimName(symbolId, key)
+    local symbolSp = self:getSymbolNodeByPos(column, row)
+    local symbolNum = self:getSymbolNumById(symbolId)
     local node
+    local nodeList = self.cacheAnimNodes[indexKey]
     if not nodeList then
         nodeList = {}
         self.cacheAnimNodes[indexKey] = nodeList
     else
         for _, item in ipairs(nodeList) do
-            if not item:isVisible() then
+            local flag = false
+            if not item:isVisible() or (item.column == column and item.row == row) then
+                flag = true
+            elseif symbolNum > 1 and item.column == column and math.abs(item:getPositionX() - symbolSp:getPositionX()) < 1 then
+                flag = true
+            end
+
+            if flag then
                 node = item
+                print("find AnimNode in cacheAnimNodes")
                 break
             end
         end
     end
 
-    local symbolNum = self:getSymbolNumById(symbolId)
-    local parentNode = self:getAnimLayer(symbolNum > 1)
+    local parentNode = self:getAnimLayer(isCut == 0)
     if not node then
-        node = self:getSkeletonNodeById(symbolId, key)
+        node = self:genSkeletonNodeById(symbolId, key)
         parentNode:addChild(node)
         table.insert(nodeList, node)
     else
@@ -338,22 +346,26 @@ function BaseTheme:createAnimNode(column, row, key, loop, isHideSymbol, endCallb
             node:release()
         end
         node:setVisible(true)
+        node:clearTracks()
         node:setToSetupPose()
     end
 
-    local symbolSp = self:getSymbolNodeByPos(column, row)
-
-    local posX, posY = symbolSp:getPosition()
-    node:setPosition(posX, posY)
+    node:setPosition(symbolSp:getPosition())
     node:setAnimation(0, animationName, loop)
+    local fixedNode = self:getFixedNode(column, row)
+    if not fixedNode then
+        node:setLocalZOrder(row)
+    else
+        node:setLocalZOrder(fixedNode:getLocalZOrder()+10)
+    end
 
-    if isHideSymbol and symbolSp then
+    if isHideSymRunning and symbolSp then
         symbolSp:setVisible(false)
     end
     
     node:registerSpineEventHandler(function(event)
         if event.animation == animationName then
-            if isHideSymbol then
+            if isHideAnimEnd then
                 node:setVisible(false)
                 if symbolSp then
                     symbolSp:setVisible(true)
@@ -366,20 +378,35 @@ function BaseTheme:createAnimNode(column, row, key, loop, isHideSymbol, endCallb
         end
     end, sp.EventType.ANIMATION_COMPLETE)
 
-    if node.useTag then
-        node.useTag = nil
-    end
+    node.column = column
+    node.row = row
 
     return node, symbolSp
 end
 
 function BaseTheme:removeAnimNode(isIncludeClipAnimNode)
-    self.animNode:removeAllChildren(true)
+    if table.empty(self.fixedSymbol) then
+        self.animNode:removeAllChildren(true)
+    else
+        local children = self.animNode:getChildren()
+        for _, node in ipairs(children) do
+            local name = node:getName()
+            if not string.find(name, "fixed_") then
+                node:removeFromParent(true)
+            end
+        end
+    end
+
     self.cacheAnimNodes = {}
     
     if isIncludeClipAnimNode then
         self:getAnimLayer(true):removeAllChildren(true)
     end
+    self.spinView:removeCacheNodes()
+end
+
+function BaseTheme:setSymbolsVisible(flag)
+    self.spinView:setAllSymbolVisible(flag)
 end
 
 function BaseTheme:getSpinPositionByPos(column, row, isCenter)
@@ -394,12 +421,118 @@ function BaseTheme:getSpinPositionByPos(column, row, isCenter)
     return position
 end
 
-function BaseTheme:initData(data)
+function BaseTheme:getSpinCost()
+    return self:getCurBetValue()*self.spinEachLineCost
+end
+
+function BaseTheme:getEachLineBet()
+    return self.spinEachLineCost
+end
+
+function BaseTheme:initBetTable()
     self.spinEachLineCost = bole:getConfig("theme", self.themeId, "spin_need")
+    local betFile = self.app:getConfig(self.themeId, "bet")
+    local i = 1
+    local betValue = {}
+    while (true) do
+        local item = betFile[tostring(i)]
+        if not item then
+            break
+        end
+        table.insert(betValue, item) --.bet_count)
+        i = i + 1
+    end
+    self.betValueTable = betValue
+end
+
+function BaseTheme:getBetSoundById(id)
+    return self.betValueTable[id].bet_sound
+end
+
+function BaseTheme:getBetValueById(id)
+    return self.betValueTable[id].bet_count
+end
+
+function BaseTheme:getBetIdByValue(betValue)
+    local betId = 1
+    for k = #self.betValueTable, 1, -1 do
+        if self.betValueTable[k].bet_count <= betValue then
+            betId = k
+            break
+        end
+    end
+    return betId
+end
+
+function BaseTheme:getMaxBetId()
+    local level = bole:getUserData():getDataByKey("level")
+    local maxBetValue = bole:getConfigCenter():getConfig("level", level, "max_bet")
+    local betId = self:getBetIdByValue(maxBetValue)
+    return betId
+end
+
+function BaseTheme:adjustBetValue(betValue)
+    local betId = self:getBetIdByValue(betValue)
+    local maxBetId = self:getMaxBetId()
+    if betId > maxBetId then
+        betId = maxBetId
+    end
+    self.betId = betId
+    print("BaseTheme:adjustBetValue betId=" .. self.betId)
+end
+
+function BaseTheme:playBetSoundById(betId)
+    local str_sound = self:getBetSoundById(betId)
+    if str_sound then
+        bole:getAudioManage():playEff(str_sound)
+    end
+end
+
+function BaseTheme:changedBetValue()
+    local maxBetId = self:getMaxBetId()
+    if self.betId == maxBetId then
+        bole:getAudioManage():playMaxBet()
+    else
+        self:playBetSoundById(self.betId)
+    end
+end
+
+function BaseTheme:addBet()
+    if self.betId < self:getMaxBetId() then
+        self.betId = self.betId + 1
+        self:changedBetValue()
+        return true
+    end
+end
+
+function BaseTheme:subBet()
+    if self.betId > 1 then
+        self.betId = self.betId - 1
+        self:changedBetValue()
+        return true
+    end
+end
+
+function BaseTheme:setMaxBetValue()
+    if self.betId < self:getMaxBetId() then
+        self.betId = self:getMaxBetId()
+        self:changedBetValue()
+        return true
+    end
+end
+
+function BaseTheme:getCurBetValue()
+    return self:getBetValueById(self.betId)
+end
+
+function BaseTheme:initData(data)
+    self:initBetTable()
     self.lastReceiveData = nil
+    self.spinForNewbieCnt = 0
     self.thisReceiveData = nil
     self.isFreeSpining = false
     self.freeSpinCount = 0
+    self.winTime = 0
     self.spinError = false
     self.curStepName = nil
     self.winBonusReels = {}
@@ -408,17 +541,30 @@ function BaseTheme:initData(data)
     self.fixedSymbol = {}
     self:genSymbolSizeSet()
     self:enterThemeDataFilter(data)
+end
 
-    local function checkRemainMiniGame()
-        self:onFirstEnter()
-    end
-    self:addWaitEvent("checkRemainMiniGame", 0.01, checkRemainMiniGame)
+function BaseTheme:onKeyBack()
+   --self.isThemeDisplay 老虎机过程 需要屏蔽返回键时使用 别忘还原状态
+   if self.isThemeDisplay then
+       local view = bole:getUIManage():createNewUI("Options","options","app.views",nil,false)
+       view:setDialog(true)
+       self:addOptions(view)
+   end
+end
+
+function BaseTheme:onEnterChild()
 end
 
 function BaseTheme:onEnter()
-    if not self.isDead then return end
+    if self.isAlive then return end
     print("BaseTheme:onEnter")
-    self.isDead = false
+    self.isAlive = true
+    bole:getBoleEventKey():addKeyBack(self)
+
+    cc.SpriteFrameCache:getInstance():addSpriteFrames(self.app:getRes(self.themeId, "symbols.plist"))
+
+    self:onEnterChild()
+
     bole:addListener("spin", self.onSpin, self, nil, true)
     bole:addListener("reelStoped", self.onReelStoped, self, nil, true)
     bole:addListener("clickSpin", self.onClickSpin, self, nil, true)
@@ -434,13 +580,18 @@ function BaseTheme:onEnter()
     bole:addListener("promptSuccess", self.onPromptSuccess, self, nil, true)
     bole:addListener("enterPopupView", self.onEnterPopupView, self, nil, true)
     bole:addListener("exitPopupView", self.onExitPopupView, self, nil, true)
+    bole:addListener("bottomViewStopAuto", self.onStopAutoSpinning, self, nil, true)
+    bole:addListener("miniEndPopup", self.onMiniEndPopup, self, nil, true)
+    bole:addListener("closeOutOfCoinsLayer", self.closeOutOfCoinsLayer, self, nil, true)
 
     bole.socket:registerCmd("batch_spin", self.spinResponse, self)
-    bole.socket:registerCmd("complete_task", self.completeTask, self)
 end
 
 function BaseTheme:onExit()
     print("BaseTheme:onExit")
+    bole:openAndroidUtil(2)
+
+    bole:getBoleEventKey():removeKeyBack(self)
     bole:removeListener("spin", self)
     bole:removeListener("reelStoped", self)
     bole:removeListener("clickSpin", self)
@@ -456,30 +607,29 @@ function BaseTheme:onExit()
     bole:removeListener("promptSuccess", self)
     bole:removeListener("enterPopupView", self)
     bole:removeListener("exitPopupView", self)
+    bole:removeListener("bottomViewStopAuto", self)
+    bole:removeListener("miniEndPopup", self)
+    bole:removeListener("closeOutOfCoinsLayer", self)
 
     bole.socket:unregisterCmd("batch_spin")
-    bole.socket:unregisterCmd("complete_task")
 
-    self.isDead = true
-end
-
-function BaseTheme:onCleanup()
-    print("BaseTheme:onCleanup")
     self:removeChatCache()
-    bole.socket:send("leave_theme", {})
     self:removeCachedRes()
+    self.isAlive = false
 end
 
-function BaseTheme:onFirstEnter()
+function BaseTheme:onFirstEnter(data)
     print("BaseTheme:onFirstEnter")
-    bole:postEvent("remainMini", self.enterThemeData)
+    bole:postEvent("remainMini", data)
 end
 
 function BaseTheme:onSpin(event)
     print("BaseTheme:onSpin")
-    self.clickStopManual = false
 
-    self:getPromptNode():setVisible(false)
+    self.clickStopManual = false
+    self.hadReplaceTrueReels = false
+    self.hadStopEnabled = false
+
     self:removeWaitEventByName("freeSpinNoWinWait")
     self:removeWaitEventByName("startCalTimeForBackLobbyReady")
     self:removeWaitEventByName("startCalTimeForBackLobby")
@@ -487,11 +637,17 @@ function BaseTheme:onSpin(event)
     self.spinError = false
     self.curStepName = nil
 
-    self:removeAnimNode(true)
+    self:resetToSpinView()
     self:onSpinViewStart()
 
-    bole:postEvent("audio_play_spin", self.freeSpinCount)
+    bole:postEvent("audio_play_spin",{self.isFreeSpining,self.autoSpinning})
     self:spinRequest()
+end
+
+function BaseTheme:resetToSpinView()
+    self:getPromptNode():setVisible(false)
+    self:removeAnimNode(true)
+    self:setSymbolsVisible(true)
 end
 
 function BaseTheme:onEnterPopupView()
@@ -510,14 +666,25 @@ function BaseTheme:onResponse(data)
     dump(data, "batch_spin", nil, {win_lines = true})
     self.lastReceiveData = self.thisReceiveData
     self.thisReceiveData = data
-    self:onReplaceTrueReels(data)
+    bole:getAppManage():updateUser(data)
 end
 
-function BaseTheme:onReplaceTrueReels(data)
+function BaseTheme:onStopEnabled()
+    if self.hadReplaceTrueReels then
+        bole:postEvent("spinStatus", "stopEnabled")
+    end
+    self.hadStopEnabled = true
+end
+
+function BaseTheme:onReplaceTrueReels()
     print("BaseTheme:onReplaceTrueReels")
     self:genFalseReels()
-    bole:postEvent("trueReelsResponse", {displayReels = self.displayReels, falseReels = self.falseReels})
+    self.spinView:setTrueReels(self.displayReels, self.falseReels)
     self:onSpinPrompt(self.stopReels)
+    self.hadReplaceTrueReels = true
+    if self.hadStopEnabled then
+        self:onStopEnabled()
+    end
 end
 
 function BaseTheme:onSpinPrompt(stopReels)
@@ -525,23 +692,28 @@ function BaseTheme:onSpinPrompt(stopReels)
     if not bonusWinReels then return end
 
     self.promptSuccessId = nil
-    self.promptBonusColumnIndex = {}
+    self.promptBonusSound = {}
     self.promptBonusPos = {}
 
     local minWinColumnIndex = #stopReels
+    local maxWinColumnIndex
     local columnCount = minWinColumnIndex
     for _, reelItem in ipairs(bonusWinReels) do
         local totalNum = 0
+        local isCutWinBouns = reelItem.interrupt_trigger == 1
+        local isHavePromptSucAnim = reelItem.prompt_resource
+        local soundCountIndex = 0
+        local prompt_sound = reelItem.prompt_sound
         for columnIndex, column in ipairs(stopReels) do
+            local checkBonusPos = {}
+            local bonusSound
             local thisTotal = 0
-            self.promptBonusPos[columnIndex] = self.promptBonusPos[columnIndex] or {}
             local columnMaxNum = reelItem.reel_max[columnIndex]
             if columnMaxNum > 0 then
                 local arrayIn = reelItem.reels[columnIndex]
                 local remainLen = 0
                 local lastTag = -100
-                for row = #column, 1, -1 do
-                    local tag = column[row]
+                for row, tag in ipairs(column) do
                     local symbolNum = self:getSymbolNumById(tag)
                     local bonusFlag = true
                     if symbolNum > 1 then
@@ -557,7 +729,7 @@ function BaseTheme:onSpinPrompt(stopReels)
 
                     if bonusFlag and arrayIn[tag] then
                         thisTotal = thisTotal + 1
-                        self.promptBonusPos[columnIndex][row] = true
+                        checkBonusPos[row] = true
                         if thisTotal == columnMaxNum then
                             break
                         end
@@ -567,45 +739,105 @@ function BaseTheme:onSpinPrompt(stopReels)
 
                 if thisTotal > 0 then
                     totalNum = totalNum + thisTotal
-                    self.promptBonusColumnIndex[columnIndex] = reelItem.prompt_sound
+                    if soundCountIndex + 1 < #prompt_sound then
+                        soundCountIndex = soundCountIndex + 1
+                    end
+                    bonusSound = prompt_sound[soundCountIndex]
+                elseif isCutWinBouns then
+                    break
                 end
             end
 
-            if columnIndex < columnCount and totalNum + reelItem.reel_max[columnIndex+1] >= reelItem.prompt_near_win then
+            local remainMaxTotal = 0
+            for k = columnIndex+1, #stopReels do
+                remainMaxTotal = reelItem.reel_max[k] + remainMaxTotal
+            end
+            if remainMaxTotal + totalNum < reelItem.prompt_near_win then  --如果后面的总数都不够，就不再出提示动画
+                break
+            elseif thisTotal > 0 then
+                local insertItem = self.promptBonusPos[columnIndex]
+                if insertItem then
+                    for k, v in pairs(checkBonusPos) do
+                        insertItem[k] = v
+                    end
+                else
+                    self.promptBonusPos[columnIndex] = checkBonusPos
+                end
+
+                if bonusSound then
+                    self.promptBonusSound[columnIndex] = bonusSound
+                end
+            end
+
+            if isHavePromptSucAnim and not self.autoSpinning and not self.isFreeSpining and columnIndex < columnCount and totalNum + reelItem.reel_max[columnIndex+1] >= reelItem.prompt_near_win then
                 if minWinColumnIndex > columnIndex then
                     minWinColumnIndex = columnIndex
                     self.promptSuccessId = reelItem.prompt_id
                 end
-                break
+
+                if not maxWinColumnIndex or maxWinColumnIndex < columnIndex + 1 then
+                    maxWinColumnIndex = columnIndex + 1
+                end
+            end
+        end
+    end
+    self.spinView:onStopWinBonusAction(minWinColumnIndex, maxWinColumnIndex)
+end
+
+function BaseTheme:onColumnStop(columnIndex, noJump)
+    if self.clickStopManual then
+        local flag = false
+        local maxColumnIndex = self.spinView:getColumnCount()
+        if self.promptBonusSound then
+            for k = 1, maxColumnIndex do
+                if self.promptBonusSound[k] then
+                    if flag then
+                        self.promptBonusSound[k] = nil
+                    else
+                        flag = true
+                    end
+                end
+            end
+        end
+
+        if not flag and columnIndex == maxColumnIndex then
+            bole:postEvent("audio_reel_stop")
+        end
+    else
+        if not noJump and (not self.promptBonusSound or not self.promptBonusSound[columnIndex]) then
+            bole:postEvent("audio_reel_stop")
+        end
+    end
+
+    if self.promptBonusPos then
+        local promptSuccessNode = self:getPromptNode()
+        if promptSuccessNode:isVisible() then
+            promptSuccessNode:setVisible(false)
+        end
+
+        local promptPos = self.promptBonusPos[columnIndex]
+        if promptPos then
+            for row, _ in pairs(promptPos) do
+                local node, sp = self:createAnimNode(columnIndex, row, "prompt", false, true)
+                self.spinView:addMoveNode(node, sp, columnIndex)
             end
         end
     end
 
-    self.spinView:onStopWinBonusAction(minWinColumnIndex)
-end
-
-function BaseTheme:onColumnStop(columnIndex)
-    if self:getBonusWin() then
-        local promptSuccessNode = self:getPromptNode()
-        promptSuccessNode:setVisible(false)
-
-        if self.clickStopManual then return end
-
-        if columnIndex < self.spinView:getColumnCount() then
-            self.spinView:onTriggerColumnPrompt(columnIndex)
-
-            local audioValue = self.promptBonusColumnIndex[columnIndex]
-            if audioValue then
-                bole:postEvent("audio_prompt", audioValue)
-            end
-
-            local promptPos = self.promptBonusPos[columnIndex]
-            if promptPos then
-                for row, _ in pairs(promptPos) do
-                    self:createAnimNode(columnIndex, row, "prompt", false, true, nil)
-                end
+    if self.promptBonusSound then
+        local audioValue = self.promptBonusSound[columnIndex]
+        if audioValue then
+            bole:postEvent("audio_prompt", audioValue)
+            if not self.clickStopManual then
+                self.promptBonusSound[columnIndex] = nil
             end
         end
+    end
+end
+
+function BaseTheme:onColumnStopCalm(columnIndex)
+    if not self.clickStopManual and self:getBonusWin() then
+        self.spinView:onTriggerColumnPrompt(columnIndex)
     end
 end
 
@@ -622,10 +854,6 @@ function BaseTheme:onReelStoped(event)
 
     self.curStepName = "reelStoped"
     self:onNext(event)
-
-    if self.isFreeSpining then
-        bole:postEvent("freeSpinNum", self.freeSpinCount)
-    end
 end
 
 --5连的弹窗
@@ -634,6 +862,13 @@ function BaseTheme:onPopupDialog(data)
     local eventName = "popupDialog"
     self.curStepName = eventName
     self.thisReceiveData.isFreeSpining = self.isFreeSpining
+
+    local data = self.thisReceiveData
+    if data["big_win"] == 1 or data["mega_win"] == 1 or data["crazy_win"] == 1 then
+        self.bigWinPoped = true
+    else
+        self.bigWinPoped = false
+    end
     bole:postEvent(eventName, self.thisReceiveData)
 end
 
@@ -649,39 +884,83 @@ function BaseTheme:onNext(event)
 
     local func = self.eventListenerForNext[self.curStepName]
     if func then
-        local data
-        if event and type(event) == "table" then
+        local data = event
+        if event and type(event) == "table" and event.func then
             data = event.result
         end
         func(self, data)
     end
 end
 
-function BaseTheme:getMiniGameLineData(data)
-    local winLines = {}
-    for _, line in ipairs(self.thisReceiveData["win_lines"]) do
-        if line.feature ~= 0 then   --10101 or line.feature == 10102 or line.feature == 10104 or line.feature == 10105 then
-            table.insert(winLines, line)
+--include freespin minigame
+function BaseTheme:checkMiniGameData()
+    local isHaveMiniGame = false
+    local isHaveWinLines = false
+    local winLines = self.thisReceiveData["win_lines"]
+    for _, line in ipairs(winLines) do
+        if line.feature > 0 then
+            isHaveMiniGame = true
+            if isHaveWinLines then
+                break
+            end
+        else
+            isHaveWinLines = true
         end
     end
-    return winLines
+    self.isHaveMiniGame = isHaveMiniGame
+    self.isHaveWinLines = isHaveWinLines
+
+    local amount = self.thisReceiveData["win_amount"]
+    if amount > 0 then
+        local times = amount/self:getSpinCost()
+        local bet = 1
+        if times <= 1 then
+            bet = 1
+        elseif times <= 3 then
+            bet = 2
+        elseif times <= 6 then
+            bet = 3
+        else
+            bet = 4
+        end
+        self.winTime = self.matrix.win_time[bet]
+    else
+        self.winTime = 0
+    end
 end
 
---bonus game and free spin drawing rects
 function BaseTheme:onMiniEffect(data)
     print("BaseTheme:onMiniEffect")
-    local winLines = self:getMiniGameLineData(data)
+    
+    self:checkMiniGameData()
 
-    if #winLines > 0 then
-        self.isHaveMiniGame = true
-    else
-        self.isHaveMiniGame = false
+    if self.isHaveMiniGame or self.isHaveWinLines then
+        local eventName = "miniEffect"
+        self.curStepName = eventName
+        bole:postEvent(eventName, {self.thisReceiveData["win_lines"], self.isFreeSpining or self.autoSpinning})
     end
 
-    local eventName = "miniEffect"
-    self.curStepName = eventName
-    bole:postEvent(eventName, winLines)
-    bole:setUserDataByKey("coins", self.thisReceiveData["coins"])
+    local runTime = self.winTime
+    if runTime < 0.5 then
+        runTime = 0.5
+    end
+    bole:postEvent("winAmount", {self.thisReceiveData["win_amount"], runTime})
+
+    self:showFiveKind()
+
+    if not self.isHaveMiniGame then
+        self:onMiniEffectEnd()
+    else
+        bole:getAudioManage():playFeature(self.thisReceiveData)
+    end
+
+    bole:getAudioManage():tryPlayWin()
+end
+
+function BaseTheme:showFiveKind()
+    if not self.bigWinPoped and not self.closeFiveKind then
+        bole:getUIManage():showFiveKing(self.thisReceiveData["xofakind"])
+    end
 end
 
 function BaseTheme:onMiniEffectEnd(event)
@@ -690,124 +969,207 @@ function BaseTheme:onMiniEffectEnd(event)
     self:onNext(event)
 end
 
-function BaseTheme:onMiniGame(data)
+function BaseTheme:onMiniGame()
+    print("BaseTheme:onMiniGame")
     local eventName = "miniGame"
     self.curStepName = eventName
+    self.thisReceiveData.autoSpinning = self.autoSpinning
     bole:postEvent(eventName, self.thisReceiveData)
+end
+
+function BaseTheme:onMiniEndPopup()
+    print("BaseTheme:onMiniEndPopup")
+    self:resetToSpinView()
+end
+
+function BaseTheme:onMiniGameBack(data)
+    print("BaseTheme:onMiniGameBack")
+
+    self:onDealWithMiniGameData(data)
+    if data and data.isDeal then
+        self.winTime = 1
+        self:putCoinToTopWin(bole:getUserDataByKey("coins"))
+    end
+    self:onCheckStartFreeSpin()
+
+    self.curStepName = "miniGameBack"
+    self:onNext()
+end
+
+function BaseTheme:onStopAutoSpinning(event)
+    self.autoSpinning = false
+end
+
+--function BaseTheme:onDrawLine(data)
+--    print("BaseTheme:onDrawLine")
+
+--    bole:postEvent("audio_win", {win_lines = self.thisReceiveData["win_lines"], themeId = self.themeId})
+
+--    if not isFreeSpinStop then        
+--        --新手引导
+--        self.spinForNewbieCnt = self.spinForNewbieCnt + 1
+--        if self.spinForNewbieCnt == 3 then
+--            bole:postEvent("checkNewbieStep", "afterSpinNum")
+--        end
+--    end
+--end
+
+function BaseTheme:onCheckStartFreeSpin()
+    if not self.isFreeSpining and self.freeSpinCount > 0 then
+        self.isFreeSpining = true
+        self.winTime = 1
+        bole:postEvent("startFreeSpin", self.freeSpinCount)
+    end
 end
 
 function BaseTheme:onDealWithMiniGameData(data)
 end
 
-function BaseTheme:onDrawLine(data)
-    print("BaseTheme:onDrawLine")
-
-    self:onDealWithMiniGameData(data)
-
-    bole:postEvent("audio_win", { win_lines = self.thisReceiveData["win_lines"], themeId = self.themeId })
-    bole:postEvent("winAmount", self.thisReceiveData["win_amount"])
-
-    local isFreeSpinStop = false
-    if self.isFreeSpining and self.freeSpinCount == 0 then
---        self.isFreeSpining = false
---        bole:postEvent("stopFreeSpin")
-        isFreeSpinStop = true
-    elseif not self.isFreeSpining and self.freeSpinCount > 0 then
-        self.isFreeSpining = true
-        bole:postEvent("startFreeSpin", self.freeSpinCount)
+function BaseTheme:waitNextFreeSpin(time)
+    local function waitSpin()
+        bole:postEvent("spin", {autoSpin = self.autoSpinning})
     end
-
-    local eventName = "drawLine"
-    self.curStepName = eventName
-    local winLines = {}
-    self.isHaveWinLines = false
-    if not self.isHaveMiniGame then
-        for _, line in ipairs(self.thisReceiveData["win_lines"]) do
-            if line.feature == 0 then
-                table.insert(winLines, line)
-                self.isHaveWinLines = true
-            end
-        end
-    end
-    bole:postEvent(eventName, {line = winLines, isFreeSpin = self.isFreeSpining or self.autoSpinning})
-
-    if not isFreeSpinStop then
-        bole:postEvent("spinStatus", "spinEnabled")
-    end
+    self:addWaitEvent("freeSpinNoWinWait", time, waitSpin)
 end
 
-function BaseTheme:onWinLineEnd(event)
-    print("BaseTheme:onWinLineEnd")
-    self.curStepName = "winLineEnd"
-    self:onNext(event)
-end
-
-function BaseTheme:onFreeSpin(data)
-    print("BaseTheme:onFreeSpin")
-
-    --走到这里表明可以点击，可以用来计算等待的时间
-    local function startCalTimeForBackLobbyReady()
-        bole:popMsg({msg = "如果30秒之内还没有任何操作，你将被踢出房间。", title = "提示"})
-        local function startCalTimeForBackLobby()
-            bole:postEvent("enterLobby")
-        end
-        self:addWaitEvent("startCalTimeForBackLobby", 30, startCalTimeForBackLobby)
-    end
-    self:addWaitEvent("startCalTimeForBackLobbyReady", 60, startCalTimeForBackLobbyReady)
-
-    self.curStepName = "freeSpin"
-    local flag = true
-    if self.freeSpinCount > 0 then
-        if self.isHaveMiniGame or self.isHaveWinLines then
-            bole:postEvent("spin")
-        else
-            local function waitSpin()
-                bole:postEvent("spin")
-            end
-            self:addWaitEvent("freeSpinNoWinWait", 0.5, waitSpin)
-        end
-        flag = false
-    elseif self.isFreeSpining then
-        self.isFreeSpining = false
-        bole:postEvent("stopFreeSpin")
-    end
-
-    if flag and self.autoSpinning then
+function BaseTheme:startAutoSpin(time)
+    local function waitSpin()
         bole:postEvent("startAutoSpinEnabled")
     end
+    self:addWaitEvent("freeSpinNoWinWait", time, waitSpin)
 end
 
+function BaseTheme:onDealNextSpin()
+    print("BaseTheme:onDealNextSpin")
+
+    local isEnableSpin = true
+    local isNext = false
+    if self.isFreeSpining then
+        if self.freeSpinCount > 0 then
+            local waitTime
+            if self.winTime > 0 then
+                waitTime = self.winTime
+            else
+                waitTime = 0.5
+            end
+            self:waitNextFreeSpin(waitTime)
+            isNext = true
+        else
+            local waitTime
+            if self.winTime > 0 then
+                waitTime = self.winTime
+            else
+                waitTime = 0.5
+            end
+
+            local function stopFreeSpin()
+                bole:postEvent("stopFreeSpin")
+            end
+            self:addWaitEvent("freeSpinStopFreeSpin", waitTime, stopFreeSpin)
+
+            isEnableSpin = false
+            self.isFreeSpining = false
+        end
+    elseif self.autoSpinning then
+        isNext = true
+        local waitTime
+        if self.winTime > 0 then
+            waitTime = 2
+        else
+            waitTime = 0.5
+        end
+
+        self:startAutoSpin(waitTime)
+    end
+
+    if isEnableSpin then
+        bole:postEvent("spinStatus", "spinEnabled")
+    end
+
+    --走到这里表明可以点击，可以用来计算等待的时间
+    if not isNext and isEnableSpin and bole:getUserDataByKey("level") > 5 then
+        local function startCalTimeForBackLobbyReady()
+            bole:popMsg({msg = "Hello!Keep making spins or you will be moved to the lobby...", title = "Notice"})
+            local function startCalTimeForBackLobby()
+                bole.socket:send(bole.SERVER_LEAVE_THEME, {})
+                bole:getAppManage():updateLobby()
+                bole:postEvent("enterLobby", true)
+            end
+            self:addWaitEvent("startCalTimeForBackLobby", 30, startCalTimeForBackLobby)
+        end
+        self:addWaitEvent("startCalTimeForBackLobbyReady", 60, startCalTimeForBackLobbyReady)
+    end
+end
+
+--freespinstart 对话框即将消失（点击start按钮）(minigameback触发的事件)
 function BaseTheme:onStartFreeSpin(event)
     print("BaseTheme:onStartFreeSpin")
     self:changeMatrix(102)
+    self:onCreateFreeSpinBottom()
+    local function waitFun()
+        self:onStartFreeSpinPopEnd()
+    end
+    self:addWaitEvent("onStartFreeSpinPopEnd", 1, waitFun)
 end
 
+--freespinstart 对话框完全消失
+function BaseTheme:onStartFreeSpinPopEnd(event)
+    print("BaseTheme:onStartFreeSpinPopEnd")
+end
+
+--freespinstop 对话框即将出现（触发弹出freespinstop对话框）
 function BaseTheme:onStopFreeSpin(event)
     print("BaseTheme:onStopFreeSpin")
+    self:onCreateCommonBottom()
+    self:changeMatrix(101)
+    self:resetToSpinView()
     bole:postEvent("freespin_dialog", {allData = self.thisReceiveData})
+
+    local function waitFun()
+        self:onFreeSpinOverPopup()
+    end
+    self:addWaitEvent("onFreeSpinOverPopup", 1, waitFun)
 end
 
+--freespinstop 对话框已经完整出现
+function BaseTheme:onFreeSpinOverPopup()
+    print("BaseTheme:onFreeSpinOverPopup")
+    self:onClearFixedSymbolLayer()
+end
+
+--freespinstop 对话框即将消失（点击collect按钮）
 function BaseTheme:onFreeSpinOver(event)
     print("BaseTheme:onFreeSpinOver")
-    self:changeMatrix(101)
-    bole:postEvent("spinStatus", "spinEnabled")
+    self:putCoinToTopWin(bole:getUserDataByKey("coins"))
+    self.winTime = 1
+    self:onDealNextSpin()
+    local function waitFun()
+        self:onFreeSpinOverPopEnd()
+    end
+    self:addWaitEvent("onFreeSpinOverPopEnd", 1, waitFun)
+end
+
+--freespinstop 对话框完全消失
+function BaseTheme:onFreeSpinOverPopEnd(event)
+    print("BaseTheme:onFreeSpinOverPopEnd")
 end
 
 function BaseTheme:addListeners()
     self.eventListenerForNext = {}
     self:addListenerForNext("reelStoped", self.onPopupDialog)
+    self:addListenerForNext("popupDialog", self.onMiniEffect)
     self:addListenerForNext("miniEffectEnd", self.onMiniGame)
-    self:addListenerForNext("miniGame", self.onDrawLine)
-    self:addListenerForNext("winLineEnd", self.onFreeSpin)
+    self:addListenerForNext("miniGame", self.onMiniGameBack)
+    self:addListenerForNext("miniGameBack", self.onDealNextSpin)
 end
 
 function BaseTheme:run()
-    display.runScene(self)
+    bole:getUIManage():runScene(self)
 end
 
 function BaseTheme:spinRequest()
     print("BaseTheme:spinRequest")
-    bole.socket:send("batch_spin", {bet = self:getBetValue()})
+    bole.socket:send("batch_spin", {bet = self:getCurBetValue()})
 end
 
 function BaseTheme:spinResponse(t, data)
@@ -815,8 +1177,9 @@ function BaseTheme:spinResponse(t, data)
     if data.list then
         local realData = data.list[1]
         if realData then
-            self:onDataFilter(realData)
             self:onResponse(realData)
+            self:onDataFilter(realData)
+            self:onReplaceTrueReels()
             self:setVouchersNum(realData)
         else
             self:spinErrorTip()
@@ -828,7 +1191,7 @@ end
 
 function BaseTheme:spinErrorTip()
     self.spinError = true
-    bole:alert("提示", "网络请求错误")
+    bole:popMsg({msg = "internet link error." , title = "Failure" , cancle = false})
 end
 
 function BaseTheme:addListenerForNext(name, func)
@@ -841,31 +1204,49 @@ end
 
 function BaseTheme:onDataFilter(data)
     print("BaseTheme:onDataFilter")
+
     self.freeSpinCount = data.free_spins_amount or data.free_spins or 0  --剩余freespin的次数
     self.freeSpinTotal = data.free_spins_total --此次freespin的总次数
     self.freeSpinCoins = data.fs_coins  --freespin累计的金币
     self.stopReels = data.view_reels  --停止时的棋盘
 
-    self:onDealWithFreeSpinFeatureData(data["win_lines"])
+    self:onDealWithFreeSpinFeatureData(data)
+
+    if self.isFreeSpining then
+        if data.free_spins then
+            bole:postEvent("freeSpinNum", {remain = self.freeSpinCount-data.free_spins, total = self.freeSpinTotal-data.free_spins})
+        else
+            bole:postEvent("freeSpinNum", {remain = self.freeSpinCount, total = self.freeSpinTotal})
+        end
+    else
+        self:putCoinToTopWin(bole:getUserDataByKey("coins")-self:getSpinCost(), data["experience"], data["levelup"])
+    end
+
+    bole:setUserDataByKey("coins", data["coins"])
+end
+
+function BaseTheme:putCoinToTopWin(coin, exp, lvlup)
+    bole:postEvent("putWinCoinToTop", {coin = coin, exp = exp, levelup = lvlup})
 end
 
 function BaseTheme:enterThemeDataFilter(data)
     print("BaseTheme:enterThemeDataFilter")
-    local betNum = data.last_bet or 1
-    self.betValue = tonumber(betNum)  --上次的倍率
-    if self.betValue == 0 then
-        self.betValue = 1
-    end
+    local betNum = data.last_bet or 0 --上次的倍率
+    self:adjustBetValue(tonumber(betNum)/self.spinEachLineCost)
 
     self.freeSpinCount = data.free_spins or 0  --剩余freespin的次数
     self.freeSpinTotal = data.free_spins_total --此次freespin的总次数
     self.freeSpinCoins = data.fs_coins --freespin累计的金币
-
-    self.freeSpinFeatureId = data.fs_type  --上次中断了的小游戏id
-
     self.stopReels = data.default_item_list  --刚进来时的棋盘
 
+    local featureId = data.fs_type  --上次中断了的小游戏id
+    if featureId then
+        self.freeSpinFeatureType = bole:getMiniGameControl():getFeatureType(featureId)
+    end
+
     self.roomInfo = data.room_info  --同房间的其他人的信息
+
+    self.thisReceiveData = data
 end
 
 function BaseTheme:getOtherPlayerInfo()
@@ -962,8 +1343,19 @@ function BaseTheme:genFalseReels()
     local falseReels = {}  --假滚轴
 
     local filledInIds2 = self.matrix.filled_number  --假滚轴选择的种子id
-    for _, id in ipairs(filledInIds2) do
-        table.insert(filledInIds, id)
+--    for _, id in ipairs(filledInIds2) do
+--        table.insert(filledInIds, id)
+--    end
+    local num = 0
+    local numIndex = {}
+    local randomSumLen = #filledInIds2
+    while(num <= 3) do
+        local random = math.random(randomSumLen)
+        if not numIndex[random] then
+            numIndex[random] = true
+            num = num + 1
+            table.insert(filledInIds, filledInIds2[random])
+        end
     end
 
     local rowNeedNum = self.matrix.filled  --真滚轴上下需要补的行数
@@ -1105,17 +1497,20 @@ function BaseTheme:onClickSpin(event)
     print("BaseTheme:onClickSpin")
     local result = event.result
     self.autoSpinning = result.autoSpin
-    local flag = true
-    if not bole:changeUserDataByKey("coins", -self:getSpinCost()) then
-        --bole:popMsg({msg = "你的金币已经不足，请充值。", title = "提示"})
-        bole:getUIManage():openUI("OutOfCoinsLayer",true,"csb/shop") 
-        flag = false
-    end
-    
-    if flag then
-        self:startSpinRequest(freeSpinCount)
+    if bole:getUserDataByKey("coins") < self:getSpinCost() then
+        bole:postEvent("spinCoinNotEnough")
+        if self.outOfCoinsLayer_ == nil then 
+            self.outOfCoinsLayer_ = bole:getUIManage():openNewUI("OutOfCoinsLayer", true, "shop_out", "app.views.shop")
+        end
+    else
+        self:startSpinRequest()
     end
 end
+
+function BaseTheme:closeOutOfCoinsLayer()
+    self.outOfCoinsLayer_ = nil
+end
+
 
 function BaseTheme:startSpinRequest()
     bole:postEvent("spin")
@@ -1130,12 +1525,9 @@ end
 
 function BaseTheme:onFirstEnterCheck(event)
     print("BaseTheme:onFirstEnterCheck")
-    if self.freeSpinCount > 0 then
-        self.isFreeSpining = true
-        bole:postEvent("startFreeSpin", self.freeSpinCount)
-    end
+    self:putCoinToTopWin(bole:getUserDataByKey("coins"), self.thisReceiveData["experience"])
 
-    self:onFreeSpin()
+    self:onMiniGameBack(event.result)
 end
 
 function BaseTheme:getMatrix()
@@ -1153,17 +1545,17 @@ end
 
 function BaseTheme:getSymbolNameByPos(column, row)
     local imgName = self:getImgByPos(column, row)
-    return string.format("theme/theme%s/%s.png", self.themeId, imgName)
+    return string.format("symbol/%s.png", imgName)
 end
 
-function BaseTheme:getSkeletonNodeByPos(column, row, key)
-    return self:getSkeletonNodeById(self.stopReels[column][row], key)
+function BaseTheme:genSkeletonNodeByPos(column, row, key)
+    return self:genSkeletonNodeById(self.stopReels[column][row], key)
 end
 
-function BaseTheme:getSkeletonNodeById(id, key)
+function BaseTheme:genSkeletonNodeById(id, key)
     local projectName, animationName = self:getAnimName(id, key)
     print("projectName=" .. projectName .. ", animationName=" .. animationName)
-    local skeletonNode = sp.SkeletonAnimation:create(string.format("theme/theme%s/symbolAnimal/%s.json", self.themeId, projectName), string.format("theme/theme%s/symbolAnimal/%s.atlas", self.themeId, projectName))
+    local skeletonNode = sp.SkeletonAnimation:create(self.app:getSymbolAnim(self.themeId, projectName))
     skeletonNode[key] = animationName
     return skeletonNode
 end
@@ -1172,15 +1564,28 @@ function BaseTheme:getSymbolNodeByPos(column, row)
     return self.spinView:getSymbolSpriteByPos(column, row)
 end
 
+function BaseTheme:getSpinNodeInfoByPos(column, row)
+    return self.spinView:getNodeInfoByPos(column, row)
+end
+
+function BaseTheme:getAnimNodeByPos(column, row)
+    for _, nodelist in pairs(self.cacheAnimNodes) do
+        for _, node in ipairs(nodelist) do
+            if node.column == column and node.row == row then
+                return node
+            end
+        end
+    end
+end
+
 function BaseTheme:changeMatrix(id)
     self.matrixId = id
-    local tag = THEMENAME[self.themeId] .. "_matrix"
-    self.matrix = bole:getConfig(tag, id)
+    bole:getAudioManage():changeMatrix(self.matrixId)
+    self.matrix = self.app:getConfig(self.themeId, "matrix", id)
 
     local columnNum = #self.matrix.array
     if not self.winBonusReels[id] then
-        local tag = THEMENAME[self.themeId] .. "_prompt"
-        local promptConfig = bole:getConfig(tag)
+        local promptConfig = self.app:getConfig(self.themeId, "prompt")
         if promptConfig then
             local winReels = {}
             for _, item in pairs(promptConfig) do
@@ -1201,8 +1606,7 @@ function BaseTheme:changeMatrix(id)
     end
     
     if not self.insertBonusReels[id] then
-        local tag = THEMENAME[self.themeId] .. "_insert"
-        local promptConfig = bole:getConfig(tag)
+        local promptConfig = self.app:getConfig(self.themeId, "insert")
         local winReels = {}
         for _, item in pairs(promptConfig) do
             if item.matrix_id == id then
@@ -1222,8 +1626,8 @@ function BaseTheme:changeMatrix(id)
         self.insertBonusReels[id] = winReels
     end
 
-    if self.spinView then
-        self.spinView:onChangeWinBonus()
+    if self.back_image then
+        self.back_image:setTexture(self.app:getRes(self.themeId, self.matrix.back_image, "png"))
     end
 end
 
@@ -1242,24 +1646,26 @@ function BaseTheme:onPromptSuccess(event)
         end
     end
 
-    if imgName and imgName ~= "" then
-        local promptFile = string.format("theme/theme%s/%s.json", self.themeId, imgName)
-        if cc.FileUtils:getInstance():isFileExist(promptFile) then
-            local position = self:getBottomPosByColumn(columnIndex, true)
-            local promptSuccessNode = self:getPromptNode()
-            promptSuccessNode:setVisible(true)
-            local skeletonNode = promptSuccessNode:getChildByTag(100)
-            if not skeletonNode then
-                skeletonNode = sp.SkeletonAnimation:create(promptFile, string.format("theme/theme%s/%s.atlas", self.themeId, imgName))
-                promptSuccessNode:addChild(skeletonNode)
-                skeletonNode:setTag(100)
-            end
-            skeletonNode:setPosition(position.x, position.y)
-            skeletonNode:setAnimation(0, "animation", true)
-        end
-    end
+    local position = self:getBottomPosByColumn(columnIndex, true)
+    local promptSuccessNode = self:getPromptNode()
+    promptSuccessNode:setVisible(true)
 
-    bole:postEvent("audio_prompt_success", promptSound)
+    local skeletonNode = promptSuccessNode:getChildByTag(100)
+    if not skeletonNode then
+        skeletonNode = sp.SkeletonAnimation:create(self.app:getSymbolAnim(self.themeId, imgName))
+        promptSuccessNode:addChild(skeletonNode)
+        skeletonNode:setTag(100)
+    else
+        skeletonNode:stopAllActions()
+    end
+    skeletonNode:setPosition(position.x, position.y)
+    skeletonNode:setAnimation(0, "animation", true)
+    skeletonNode:setOpacity(0)
+    skeletonNode:runAction(cc.FadeIn:create(0.4))
+
+    if promptSound then
+        bole:postEvent("audio_prompt_success", promptSound)
+    end
 end
 
 function BaseTheme:getBottomPosByColumn(column, isCenter)
@@ -1270,11 +1676,6 @@ function BaseTheme:getBottomPosByColumn(column, isCenter)
         position.y = position.y + (matrix.cell_size[2] * matrix.array[column]) / 2
     end
     return position
-end
-
-function BaseTheme:getLineById(id, key)
-    local tag = THEMENAME[self.themeId] .. "_line"
-    return bole:getConfig(tag, id, key)
 end
 
 function BaseTheme:getSymbolInfo(info)
@@ -1291,9 +1692,9 @@ function BaseTheme:getSymbolInfo(info)
     return isNew
 end
 
-function BaseTheme:getFrameNameById(id, flag)
+function BaseTheme:getFrameNameById(id)
     local img = self:getImgById(id)
-    return string.format("theme/theme%s/%s.png", self.themeId, img)
+    return string.format("symbol/%s.png", img)
 end
 
 function BaseTheme:getImgById(id)
@@ -1305,24 +1706,18 @@ function BaseTheme:getImgByPos(column, row)
 end
 
 function BaseTheme:getItemById(id)
-    local tag = THEMENAME[self.themeId] .. "_symbol"
-    return bole:getConfig(tag, id)
+    return self.app:getConfig(self.themeId, "symbol", id)
 end
 
 function BaseTheme:getAnimName(id, key)
     local item = self:getItemById(id)
-    return item[key .. "_project"], item[key .. "_animation"]
-end
-
-function BaseTheme:getSymbolsByColumn(column)
-    return self.symbols[column]
+    return item[key .. "_project"], item[key .. "_animation"], item[key .. "_cut"]
 end
 
 function BaseTheme:genSymbolSizeSet()
     self.symbolsSizeSet = {}
 
-    local tag = THEMENAME[self.themeId] .. "_symbol"
-    local symbols = bole:getConfig(tag)
+    local symbols = self.app:getConfig(self.themeId, "symbol")
     for id, item in pairs(symbols) do
         local symbolSize = item.symbol_size
         if symbolSize[1] > 1 or symbolSize[2] > 1 then  --[1]宽， [2]长
@@ -1331,28 +1726,8 @@ function BaseTheme:genSymbolSizeSet()
     end
 end
 
-function BaseTheme:getSpinCost()
-    return self.betValue*self.spinEachLineCost
-end
-
-function BaseTheme:getBetValue()
-    return self.betValue
-end
-
-function BaseTheme:setBetValue(value)
-    self.betValue = value
-end
-
-function BaseTheme:getEachLineBet()
-    return self.spinEachLineCost
-end
-
 function BaseTheme:getThemeId()
     return self.themeId
-end
-
-function BaseTheme:getThemeName()
-    return THEMENAME[self.themeId]
 end
 
 function BaseTheme:addMiniGame(view)
@@ -1374,7 +1749,7 @@ end
 
 function BaseTheme:createChatView()
     if self.chatView_ == nil then
-        self.chatView_ = bole:getUIManage():getSimpleLayer("ChatLayer")
+        self.chatView_ = bole:getUIManage():createNewUI("ChatLayer","inSlot_chat","app.views.chat",nil,false)
         self:addChild(self.chatView_, THEME_CHILD_ORDER.CHAT, THEME_CHILD_ORDER.CHAT)
     end
     self.chatView_:setVisible(true)
@@ -1382,15 +1757,15 @@ function BaseTheme:createChatView()
 end
 
 function BaseTheme:createFriendView()
-    bole:getUIManage():openUI("FriendLayer",true)
+    bole:getUIManage():openUI("FriendLayer",true, "friend")
 end
 
 function BaseTheme:createChatCache()
-    bole:getInstance("app.views.chat.ChatManager"):initChatManager()
+    
 end
 
 function BaseTheme:removeChatCache()
-    bole:getInstance("app.views.chat.ChatManager"):removeChatManager()
+    bole:getChatManage():cleanGameChatMsg()
 end
 
 function BaseTheme:setVouchersNum(data)  
@@ -1404,23 +1779,6 @@ function BaseTheme:setVouchersNum(data)
 
     if data.vip_points ~= nil then
         bole:getUserData():setDataByKey("vip_points",data.vip_points)
-    end
-end  
-
-function BaseTheme:completeTask(t,data)
-    if t == "complete_task" then
-        if data ~= nil then
-            local taskTable = bole:getUserData():getDataByKey("daily_task")
-            for j = 1, # data do
-                for i = 1, # taskTable do
-                    if tonumber(taskTable[i].id) == tonumber(data[j]) then
-                        taskTable[i].is_completed = 1
-                        taskTable[i].collect_reward = 0
-                    end
-                end
-            end
-            bole:getUserData():setDataByKey("daily_task",taskTable)
-        end
     end
 end
 

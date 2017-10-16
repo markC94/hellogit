@@ -20,6 +20,7 @@ function UserData:ctor()
     --    self.vip_points = 0
     checkNumberKeys = table.set(allNumberKeys)
     bole.socket:registerCmd("sync_user_info", self.updateUserInfo, self)
+    self.sync_user_info = nil
 end
 
 function UserData:setData(data)
@@ -98,10 +99,11 @@ end
 
 function UserData:updateUserInfo(t,data)
     if t == "sync_user_info" then
-        for k , v in pairs(data) do
-            self:setDataByKey(k, v, true)
-        end
+        self.sync_user_info = data
     end
+end
+function UserData:getSyncUserInfo()
+    return self.sync_user_info
 end
 
 function UserData:updateSceneInfo(key)

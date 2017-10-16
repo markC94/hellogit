@@ -15,43 +15,53 @@ function Options:onCreate()
     local btn_close = root:getChildByName("btn_close")
     btn_close:addTouchEventListener(handler(self, self.touchEvent))
 
-    local btn_lobby = option:getChildByName("btn_lobby")
-    btn_lobby:addTouchEventListener(handler(self, self.touchEvent))
+    local listView = root:getChildByName("listView")
+    listView:setScrollBarOpacity(0)
+    self.listView = listView
+    self.bg2 = root:getChildByName("bg2")
+    self.mask_down = root:getChildByName("mask_down")
 
-    local btn_chips = option:getChildByName("btn_chips")
-    btn_chips:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_fb = listView:getChildByName("cell_fb")
+    self.cell_lobby = listView:getChildByName("cell_lobby")
+    self.cell_sounds = listView:getChildByName("cell_sounds")
+    self.cell_music = listView:getChildByName("cell_music")
+    self.cell_notifications = listView:getChildByName("cell_notifications")
+    self.cell_paytable = listView:getChildByName("cell_paytable")
+    self.cell_getChips = listView:getChildByName("cell_getChips")
+    self.cell_contactUs = listView:getChildByName("cell_contactUs")
+    self.cell_rateGame = listView:getChildByName("cell_rateGame")
+    self.cell_leaveClub = listView:getChildByName("cell_leaveClub")
+    self:initFbCell()
 
-    local btn_sipport = option:getChildByName("btn_sipport")
-    btn_sipport:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_fb:setAnchorPoint(0.5,0.5)
+    self.cell_lobby:setAnchorPoint(0.5,0.5)
+    self.cell_sounds:setAnchorPoint(0.5,0.5)
+    self.cell_music:setAnchorPoint(0.5,0.5)
+    self.cell_notifications:setAnchorPoint(0.5,0.5)
+    self.cell_paytable:setAnchorPoint(0.5,0.5)
+    self.cell_getChips:setAnchorPoint(0.5,0.5)
+    self.cell_contactUs:setAnchorPoint(0.5,0.5)
+    self.cell_rateGame:setAnchorPoint(0.5,0.5)
+    self.cell_leaveClub:setAnchorPoint(0.5,0.5)
 
-    local btn_func = option:getChildByName("btn_func")
-    btn_func:addTouchEventListener(handler(self, self.touchEvent))
-    self.btn_func_ = btn_func
+    self.cell_fb:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_lobby:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_paytable:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_getChips:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_contactUs:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_rateGame:addTouchEventListener(handler(self, self.touchEvent))
+    self.cell_leaveClub:addTouchEventListener(handler(self, self.touchEvent))
 
-    btn_close:setPressedActionEnabled(true)
-    btn_lobby:setPressedActionEnabled(true)
-    btn_chips:setPressedActionEnabled(true)
-    btn_sipport:setPressedActionEnabled(true)
-    btn_func:setPressedActionEnabled(true)
-    self.txt_title_ = root:getChildByName("txt_title")
-    self.btn_func_text_ = btn_func:getChildByName("txt")
-    self.btn_func_icon_ = btn_func:getChildByName("icon")
-    --[[
-    local slider_music = ccui.Helper:seekWidgetByName(root, "slider_music")
-    slider_music:addTouchEventListener(handler(self, self.audioEvent))
-    slider_music:setPercent(bole:getAudioManage():getMusicVolume()*100)
+    local node_music=self.cell_music:getChildByName("node_music")
+    local node_sound=self.cell_sounds:getChildByName("node_sounds")
+    local cell_notifications=self.cell_notifications:getChildByName("node_notifications")
 
-    local slider_sound = ccui.Helper:seekWidgetByName(root, "slider_sound")
-    slider_sound:addTouchEventListener(handler(self, self.audioEvent))
-    slider_sound:setPercent(bole:getAudioManage():getSoundVolume()*100)
-    --]]
-
-    local node_music=option:getChildByName("node_music")
-    local node_sound=option:getChildByName("node_sound")
     self.music=self:getNewSwitch("music")
     self.sound=self:getNewSwitch("sound")
+    self.notification = self:getNewSwitch("notification")
     node_music:addChild(self.music)
     node_sound:addChild(self.sound)
+    cell_notifications:addChild(self.notification)
     self.music:setOn(bole:getAudioManage():isMusic())
     self.sound:setOn(bole:getAudioManage():isSound())
     self.status = 1
@@ -62,6 +72,18 @@ end
 function Options:onEnter()
     bole:addListener("initOptions", self.initOptions, self, nil, true)
 end
+function Options:onKeyBack()
+   self:closeUI()
+end
+
+function Options:initFbCell()
+    self.cell_fb:getChildByName("connectFb"):setVisible(true)
+    self.cell_fb:getChildByName("txt"):setVisible(false)
+    if bole:getFacebookCenter():isLogin() then
+        self.cell_fb:getChildByName("connectFb"):setVisible(false)
+        self.cell_fb:getChildByName("txt"):setVisible(true)
+    end
+end
 
 function Options:initOptions(data)
     data = data.result
@@ -71,23 +93,22 @@ end
 
 function Options:updateUI()
     if self.status == self.SLOT_OPTIONS then
-        self.txt_title_:setString("SLOT OPTION")
-        self.btn_func_text_:setString("Pay Table")
-        self.btn_func_text_:setTextColor({ r = 57, g = 61, b = 107})
-        self.btn_func_:loadTextures("res/options/setting_button_yellow.png","res/options/setting_button_yellow.png","res/options/setting_button_yellow.png")
-        self.btn_func_icon_:loadTexture("res/options/setting_paytable.png")
+        self.bg2:setVisible(false)
+        self.mask_down:setVisible(true)
+        self.listView:removeChild(self.cell_fb)
+        self.listView:removeChild(self.cell_leaveClub)   
     elseif self.status == self.LOBBY_OPTIONS then
-        self.txt_title_:setString("LOBBY OPTION")
-        self.btn_func_text_:setString("Pay Table")
-        self.btn_func_text_:setTextColor({ r = 57, g = 61, b = 107})
-        self.btn_func_:loadTextures("res/options/setting_button_yellow.png","res/options/setting_button_yellow.png","res/options/setting_button_yellow.png")
-        self.btn_func_icon_:loadTexture("res/options/setting_paytable.png")
+        self.bg2:setVisible(true)
+        self.mask_down:setVisible(false)
+        self.listView:removeChild(self.cell_lobby)
+        self.listView:removeChild(self.cell_paytable)
+        self.listView:removeChild(self.cell_getChips)
+        self.listView:removeChild(self.cell_leaveClub)
     elseif self.status == self.CLUB_OPTIONS then
-        self.txt_title_:setString("CLUB OPTION")
-        self.btn_func_text_:setString("Leave Your Club")
-        self.btn_func_text_:setTextColor({ r = 115, g = 17, b = 0})
-        self.btn_func_:loadTextures("res/options/clubSetting_button_orange.png","res/options/clubSetting_button_orange.png","res/options/clubSetting_button_orange.png")
-        self.btn_func_icon_:loadTexture("res/options/clubSetting_leave.png")
+        self.bg2:setVisible(false)
+        self.mask_down:setVisible(true)
+        self.listView:removeChild(self.cell_paytable)
+        self.listView:removeChild(self.cell_fb)
     end
 end
 
@@ -106,14 +127,16 @@ function Options:getNewSwitch(name)
             bole:getAudioManage():setMusic(pControl:isOn())
         end
     end
-    local sp1=display.newSprite("options/setting_mask.png")
-    local sp2=display.newSprite("options/setting_on.png")
-    local sp3=display.newSprite("options/setting_off.png")
-    local sp4=display.newSprite("options/setting_slide.png")
+    local sp1=display.newSprite("setting/setting_mask.png")
+    local sp2=display.newSprite("setting/setting_on.png")
+    local sp3=display.newSprite("setting/setting_off.png")
+    local sp4=display.newSprite("setting/setting_slide.png")
     local pSwitchControl = cc.ControlSwitch:create(
     sp1,sp2,sp3,sp4,
-    cc.Label:createWithSystemFont("On", "Arial-BoldMT", 26),
-    cc.Label:createWithSystemFont("Off", "Arial-BoldMT", 26)
+    cc.Label:createWithTTF("ON", "font/bole_ttf.ttf", 26),
+    cc.Label:createWithTTF("OFF", "font/bole_ttf.ttf", 26)
+    --cc.Label:createWithSystemFont("ON", "font/bole_ttf.ttf", 28),
+    --cc.Label:createWithSystemFont("OFF", "font/bole_ttf.ttf", 28)
     )
     pSwitchControl:setName(name)
     pSwitchControl:registerControlEventHandler(valueChanged, cc.CONTROL_EVENTTYPE_VALUE_CHANGED)
@@ -132,60 +155,95 @@ end
 
 function Options:touchEvent(sender, eventType)
     local name = sender:getName()
-    local tag = sender:getTag()
+    local tag = sender:getTag() 
     print("touchEvent:" .. name)
     if eventType == ccui.TouchEventType.began then
         print("Touch Down")
+        sender:runAction(cc.ScaleTo:create(0.1,0.98,0.98))
     elseif eventType == ccui.TouchEventType.moved then
         print("Touch Move")
     elseif eventType == ccui.TouchEventType.ended then
+        sender:runAction(cc.ScaleTo:create(0.1,1,1))
         print("Touch Up")
         if name == "btn_close" then
             self:closeUI()
-        elseif name == "btn_lobby" then
-            self:btn_back()
-        elseif name == "btn_func" then
-            self:btn_func()
-        elseif name == "btn_chips" then
-            self:btn_chips()
-        elseif name == "btn_sipport" then
-            self:btn_sipport()
+        elseif name == "cell_fb" then
+            self:fb()
+        elseif name == "cell_lobby" then
+            self:lobby()
+        elseif name == "cell_paytable" then
+            self:payTable()
+        elseif name == "cell_getChips" then
+            self:getChips()
+        elseif name == "cell_contactUs" then
+            self:contactUs()
+        elseif name == "cell_rateGame" then
+            self:rateGame()
+        elseif name == "cell_leaveClub" then
+            self:leaveClub()
         end
     elseif eventType == ccui.TouchEventType.canceled then
         print("Touch Cancelled")
+        sender:runAction(cc.ScaleTo:create(0.1,1,1))
     end
 end
 
-function Options:btn_chips()
-    print("btn_chips")
+function Options:fb()
+    bole:getFacebookCenter():bindFacebook()
 end
 
-function Options:btn_func()
-    if self.status == self.SLOT_OPTIONS then
-	    bole:postEvent("showPayTable")
-        self:closeUI()
-    elseif self.status == self.LOBBY_OPTIONS then
-	   
-    elseif self.status == self.CLUB_OPTIONS then
-        bole:getUIManage():openClubTipsView(14, function() bole.socket:send("leave_club",{},true) end)
-        self:closeUI()
+function Options:lobby()
+    if bole:getSpinApp():isThemeAlive() then
+        --bole:popMsg( { msg = "Leave the slot and return to lobby?", title = "leave slot", cancle = true },
+        --function()
+            bole.socket:send(bole.SERVER_LEAVE_THEME, { })
+            bole:getAppManage():updateLobby()
+            bole:postEvent("enterLobby", true)
+        --end )
+    else
+        bole:postEvent("backLobbyScene", true)
     end
+    self:closeUI()
 end
 
-function Options:btn_back()
-    if self.status == self.SLOT_OPTIONS then
-	    bole:postEvent("enterLobby")
-    elseif self.status == self.LOBBY_OPTIONS then
-        bole:postEvent("backLobbyScene")
-        self:closeUI()
-    elseif self.status == self.CLUB_OPTIONS then
-        bole:postEvent("backLobbyScene")
-        self:closeUI()
-    end
+function Options:payTable()
+    bole:getUIManage():openPayTable()
+    self:closeUI()
 end
 
-function Options:btn_sipport()
-    print("btn_sipport")
+function Options:getChips()
+    bole:getUIManage():openNewUI("ShopLayer",true,"shop_lobby","app.views.shop")
+    self:closeUI()
+end
+
+
+function Options:contactUs()
+    print("contactUs")
+    self:closeUI()
+    bole:tohelpshift()
+end
+
+function Options:rateGame()
+    print("rateGame")
+    self:closeUI()
+--    local index =math.random(1,4)
+--    if index== 1 then 
+--        bole:toAdjustPrice(os.time().."",0.99)
+--    end
+--    if index== 2 then 
+--        bole:toAdjustPlayer()
+--    end
+--    if index== 3 then 
+--        bole:toAdjustNoCoins()
+--    end
+--    if index== 4 then 
+--        bole:toAdjustLevel()
+--    end
+end
+
+function Options:leaveClub()
+    bole:popMsg( { msg = "Your are about to leave your club.Are you sure?", title = "leave club", cancle = true }, function() bole.socket:send("leave_club", { }, true) end)
+    self:closeUI()
 end
 
 function Options:adaptScreen()

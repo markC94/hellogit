@@ -3,6 +3,7 @@
 --此文件由[BabeLua]插件自动生成
 
 local LotteryLayer = class("LotteryLayer", cc.load("mvc").ViewBase)
+local ShowCollectNum = { 100000000 ,400000000, 1000000000000}
 
 function LotteryLayer:onCreate()
     print("LotteryLayer-onCreate")
@@ -23,6 +24,7 @@ function LotteryLayer:onEnter()
    bole.socket:registerCmd("enter_lottery", self.enter_lottery, self)
    bole.socket:registerCmd("use_lottery", self.use_lottery, self)
    bole:addListener("changeVouchers", self.changeVouchers, self, nil, true)
+   bole:addListener("changeCollect", self.changeCollect, self, nil, true)
 end
 
 
@@ -58,8 +60,11 @@ function LotteryLayer:initFreeSchedule(root)
     self.schedule_ = self:createProgressTimer(schedule)
     self.collect_ = root:getChildByName("collect")
     self.copperCollect_ = root:getChildByName("collect"):getChildByName("collect_1")
+    self.copperCollect_:getChildByName("text"):setString(bole:formatCoins(ShowCollectNum[1],5))
     self.silverCollect_ = root:getChildByName("collect"):getChildByName("collect_2")
+    self.silverCollect_:getChildByName("text"):setString(bole:formatCoins(ShowCollectNum[2],5))
     self.goldenCollect_ = root:getChildByName("collect"):getChildByName("collect_3")
+    self.goldenCollect_:getChildByName("text"):setString(bole:formatCoins(ShowCollectNum[3],3))
 end
 
 function LotteryLayer:initGetVouchers(root)
@@ -128,7 +133,7 @@ function LotteryLayer:touchEvent(sender, eventType)
         elseif name == "btn_3" then
             self:playLottery(3,sender)
         elseif name == "showInfo" then
-            bole:getUIManage():openUI("LotteryInfoLayer",true,"csb/lottery")
+            bole:getUIManage():openUI("LotteryInfoLayer",true,"lottery")
         elseif name == "buy1" then
             print(self.kindId_)
         elseif name == "buy2" then
@@ -169,19 +174,10 @@ function LotteryLayer:use_lottery(t,data)
                 self.vouchersNum_[self.useLottery_] = self.vouchersNum_[self.useLottery_] - 1
             end
             --bole:setUserDataByKey("vouchers",self.vouchersNum_)
-            bole:getUIManage():openUI("LotteryCollectLayer",true,"csb/lottery")
+            bole:getUIManage():openUI("LotteryCollectLayer",true,"lottery")
             bole:postEvent("initCollectInfo",data)
             self:showAction(data)
             self:refreshFuncbtn()
-            for i = 1, 3 do
-                if self.lotteryInfo_.coins_vouchers[i] == 3 and data.coins_vouchers[i] == 0 then
-                    --TODO 收集齐了
-                    bole:getUserData():updateSceneInfo("coins")
-                    self.lotteryInfo_.coins_vouchers[i] = 0
-                end
-            end
-            self.lotteryInfo_.coins_vouchers = data.coins_vouchers
-            self:refreshCollect()
         elseif data.error == 3 then
             self:refreshBuyView(self.kindId_,self.pos)
         end
@@ -212,15 +208,28 @@ function LotteryLayer:changeVouchers(data)
     self:refreshFuncbtn()
 end
 
+function LotteryLayer:changeCollect(data)
+    data = data.result
+    for i = 1, 3 do
+        if self.lotteryInfo_.coins_vouchers[i] == 3 and data.coins_vouchers[i] == 0 then
+            -- TODO 收集齐了
+            bole:getAppManage():addCoins(ShowCollectNum[i])
+            self.lotteryInfo_.coins_vouchers[i] = 0
+        end
+    end
+    self.lotteryInfo_.coins_vouchers = data.coins_vouchers
+    self:refreshCollect()
+end
+
 function LotteryLayer:refreshBuyView(kindId,pos)
     self.touchLayer_:setVisible(true)
     self.getVouchers_:setPosition(pos.x + 20,pos.y + 60)
     self.getVouchers_:setScale(0.1)
     self.getVouchers_:runAction(cc.ScaleTo:create(0.2,1,1))
-    local iconPath = {"res/lottery/levelup_lottoBronze.png", "res/lottery/levelup_lottoSilver.png", "res/lottery/levelup_lottoGold.png"}
+    local iconPath = {"lottery/levelup_lottoBronze.png", "lottery/levelup_lottoSilver.png", "lottery/levelup_lottoGold.png"}
     local num = {{5,25,75},{5,25,75},{5,25,75}}
     local money = {{30,128,258},{30,128,258},{30,128,258}}
-
+    
     for i = 1, 3 do
         self.getVouchers_:getChildByName("buy" .. i):getChildByName("icon"):loadTexture(iconPath[kindId])
         self.getVouchers_:getChildByName("buy" .. i):getChildByName("icon"):getChildByName("text"):setString("x" .. num[kindId][i])
@@ -229,11 +238,11 @@ function LotteryLayer:refreshBuyView(kindId,pos)
 end
 
 function LotteryLayer:createProgressTimer(schedule)      
-    local bloodEmptyBg = cc.Sprite:create("res/club/club_progressbar01.png")
+    local bloodEmptyBg = cc.Sprite:create("club/club_progressbar01.png")
     bloodEmptyBg:setPosition(500,40)
     schedule:addChild(bloodEmptyBg)
 
-    local bloodBody = cc.Sprite:create("res/club/club_progressbar02.png")  
+    local bloodBody = cc.Sprite:create("club/club_progressbar02.png")  
     local bloodProgress = cc.ProgressTimer:create(bloodBody)  
     bloodProgress:setType(cc.PROGRESS_TIMER_TYPE_BAR) --设置为条形 type:cc.PROGRESS_TIMER_TYPE_RADIAL  
     bloodProgress:setMidpoint(cc.p(0,0)) --设置起点为条形坐下方  
@@ -256,6 +265,8 @@ function LotteryLayer:onExit()
     bole.socket:unregisterCmd("enter_lottery")
     bole.socket:unregisterCmd("use_lottery")
     bole:removeListener("changeVouchers", self)
+    bole:removeListener("changeCollect", self)
+    
 end
 
 return LotteryLayer

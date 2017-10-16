@@ -8,8 +8,13 @@ function ClubChestLayer:onCreate()
     root:setTouchEnabled(true)
     root:addTouchEventListener(handler(self, self.touchEvent))
     self.txt_rank = root:getChildByName("txt_rank")
+    local img_bg = root:getChildByName("img_bg")
+    self.img_eff = img_bg:getChildByName("img_eff")
+    self.img_eff:runAction(cc.RepeatForever:create(cc.RotateBy:create(1,180)))
 end
-
+function ClubChestLayer:onKeyBack()
+   
+end
 function ClubChestLayer:updateUI(data)
     self:initRank(data.result)
 end

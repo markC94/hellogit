@@ -4,27 +4,25 @@
 local AppManage = class("AppManage")
 function AppManage:ctor(...)
     -- body
+    self.uplevels_list=bole:newBoleList()
     self:init()
     print("AppManage-ctor")
 end
 function AppManage:init()
-
-    local socket = cc.loadLua("network.Network")
-    bole.socket = socket
-    socket:onCreate(bole.SERVER_DEBUG_IP, bole.SERVER_PORT)
-    socket:registerDelegate(self, self.serverStateChanged)
     bole.socket:registerCmd(bole.SERVER_ENTER_GAME, self.oncmd, self)
     bole.socket:registerCmd(bole.SERVER_B_SYNC, self.sync, self)
     bole.socket:registerCmd(bole.SERVER_PLAY_TOGETHER, self.room, self)
     bole.socket:registerCmd(bole.SEND_ROOM_INVITATION, self.room, self)
     bole.socket:registerCmd(bole.RECV_ROOM_INVITATION, self.room, self)
     bole.socket:registerCmd(bole.ACCEPT_ROOT_INVITATION, self.room, self)
+    bole.socket:registerCmd(bole.COLLECT_LOGIN_REWARD, self.oncmd, self)
+    bole.socket:registerCmd(bole.GET_RECOMMEND_USERS, self.oncmd, self)
     self.theme_id = 1
     self:initListener()
 end 
 
 function AppManage:initListener()
-
+    bole:addListener("UpLevelOver", self.upLevelOver, self, nil, true)
     bole:addListener("spin", self.spin, self, nil, true)
     bole:addListener("enterLobby", self.enterLobby, self, nil, true)
     bole:addListener("clear_scene", self.clearScene, self, nil, true)
@@ -32,8 +30,14 @@ function AppManage:initListener()
     bole:getUIManage():initListener()
     bole:getAudioManage():initListener()
     bole:getMiniGameControl():initListener()
+    bole:getClubManage():initListener()
+    bole:getFriendManage():initListener()
+    bole:getBuyManage():initListener()
+    bole:getChatManage():initListener()
 end
+
 function AppManage:removeListener()
+    bole:getEventCenter():removeEventWithTarget("UpLevelOver", self)
     bole:getEventCenter():removeEventWithTarget("spin", self)
     bole:getEventCenter():removeEventWithTarget("enterLobby", self)
     bole:getEventCenter():removeEventWithTarget("clear_scene", self)
@@ -44,28 +48,14 @@ function AppManage:removeListener()
     bole.socket:unregisterCmd(bole.SEND_ROOM_INVITATION)
     bole.socket:unregisterCmd(bole.RECV_ROOM_INVITATION)
     bole.socket:unregisterCmd(bole.ACCEPT_ROOT_INVITATION)
+    bole.socket:unregisterCmd(bole.COLLECT_LOGIN_REWARD)
+    bole.socket:unregisterCmd(bole.GET_RECOMMEND_USERS)
     bole:getUIManage():removeListener()
     bole:getAudioManage():removeListener()
     bole:getMiniGameControl():removeListener()
-end
-
-function AppManage:connectScoket()
-    bole.socket:connect()
-end
-function AppManage:serverStateChanged(id, data)
-    if id == MessageType.socket_open then
-        print("-----------------------Sever Connect OK---------------------")
-        self:login()
-    elseif id == MessageType.socket_error then
-        print("-----------------------Sever Connect ERROR---------------------")
---        bole:getLoginControl():openLoginView()
-        self:connectScoket()
-        bole:getLoginControl():openLoginView()
-    elseif id == MessageType.socket_close then
-        print("-----------------------Sever Connect CLOSE---------------------")
-        self:connectScoket()
-        bole:getLoginControl():openLoginView()
-    end
+    bole:getClubManage():removeListener()
+    bole:getFreindManage():removeListener()
+    bole:getChatManage():removeListener()
 end
 
 function AppManage:getThemeId()
@@ -73,139 +63,168 @@ function AppManage:getThemeId()
 end
 
 function AppManage:getThemeData()
-    --theme_cion theme_id
-    return bole:getConfigCenter():getConfig("theme",self.theme_id)
+    return bole:getConfigCenter():getConfig("theme", self.theme_id)
+end
+--level
+function AppManage:addUpLevel(item)
+    if not self.targetLevel then
+        self.targetLevel=bole:getUserDataByKey("level")
+    end
+    item.level=self.targetLevel
+    self.uplevels_list:push(item)
+    self.targetLevel=item.level+1
+--    bole:setUserDataByKey("experience",bole:getUserDataByKey("experience"))
 end
 
--- login
-function AppManage:login()
-    bole:getLoginControl():login()
+function AppManage:popUpLevel()
+    return self.uplevels_list:pop()
 end
+
+function AppManage:clearUpLevel()
+    self.uplevels_list:clear()
+    self.isTryShowUpLevel=false
+    --中断调用升级
+    if self.targetLevel then
+        bole:setUserDataByKey("level",self.targetLevel)
+        self.targetLevel=nil
+    end
+end
+
+function AppManage:emptyUpLevel()
+    return self.uplevels_list:empty()
+end
+
+function AppManage:tryShowUpLevel()
+    --进度条满调用升级
+    if self.targetLevel then
+        local level=bole:getUserDataByKey("level")
+        if self.targetLevel>level then
+            bole:setUserDataByKey("level",level+1)
+        end
+    end
+
+    if self.isTryShowUpLevel then
+        return
+    end
+    self.isTryShowUpLevel=true
+    self:upLevelOver()
+end
+
+function AppManage:upLevelOver()
+    if self:emptyUpLevel() then
+        self:clearUpLevel()
+        return
+    end
+    local levelup = bole:getAppManage():popUpLevel()
+    bole:getUIManage():showUpLevel( { levelup },levelup.level)
+end
+
+--
+-- login
 function AppManage:logout()
 
 end
 -- lobby
-function AppManage:enterLobby()
-    bole:postEvent("audio_stop_all_spin")
+function AppManage:enterLobby(data)
+    self:clearUpLevel()
+    local isOpenScene
+    if data then
+        isOpenScene=data.result
+    end
     bole:postEvent("clear_scene")
-    bole:getUIManage():openUI(bole.UI_NAME.SlotsLobbyScene)
+    if isOpenScene then 
+        bole:getAudioManage():clearTheme()
+        bole:getUIManage():openScene("LobbyScene")
+    end
+    bole:postEvent("LobbyScene","slot")
 end
+-- lobby
+function AppManage:enterLobbyAndOpenLayer(layerName)
+    bole:postEvent("clear_scene")
+    bole:getAudioManage():clearTheme()
+    bole:getUIManage():openScene("LobbyScene")
+    bole:postEvent("LobbyScene",layerName)
+end
+--更新大厅推荐
+function AppManage:updateLobby()
+    if not bole.lobby_update_time then
+        bole.lobby_update_time=600
+        bole.socket:send(bole.GET_RECOMMEND_USERS, {})
+        return
+    end
+    if bole.lobby_update_time<=0 then
+        bole.lobby_update_time=600
+        bole.socket:send(bole.GET_RECOMMEND_USERS, {})
+    end
+end
+
+
+function AppManage:setClubInfo(data)
+   self.clubInfo=data
+end
+
+function AppManage:getClubInfo()
+   return self.clubInfo
+end
+
 function AppManage:clearScene()
     bole:getUIManage():clearTips()
 end
 -- game
-function AppManage:startGame(theme_id)
-    -- 目前只有做完的主题
---    if theme_id ~= 1 and theme_id ~= 2 and theme_id ~= 3 and theme_id ~= 4 then return end
+function AppManage:startGame(theme_id,is_private)
+    print("AppManage:startGame")
     self.theme_id = theme_id
-    --test
---    if theme_id==4 then
---        bole:getUIManage():showUpLevel()
---        return
---    end
-
---    if theme_id ==5 then
---        local testm={"oz_prompt1","oz_prompt2"}
---        bole:postEvent("audio_prompt",testm)
---        return
---    end
---    if theme_id ==4 then
---        print("------------------------succecc")
---        local testm="oz_success"
---        bole:postEvent("audio_prompt_success",testm)
---        return
---    end
-    
-    self:continueGame()
+    self:continueGame(nil,is_private)
 end
+
 function AppManage:overGame()
 
 end
 
 --进入游戏
-function AppManage:continueGame(data)
+function AppManage:continueGame(data,is_private)
+    self:clearUpLevel()
     if data then
+        print("AppManage:continueGame have data")
         bole:getSpinApp():startTheme(self.theme_id)
         bole:postEvent("enterThemeData", data)
     else
+        print("AppManage:continueGame nil data")
         bole:getSpinApp():startTheme(self.theme_id)
-        local data = {}
-        data.theme_id = self.theme_id
-        bole.socket:send(bole.SERVER_ENTER_GAME, data, true)
+
+        self:sendEnterTheme(self.theme_id, is_private)
     end
+end
+
+function AppManage:sendEnterTheme(themeId, isPrivate)
+    bole.socket:send(bole.SERVER_ENTER_GAME, {theme_id = themeId, is_private = isPrivate})
+    self.isPrivate = isPrivate
 end
 
 function AppManage:oncmd(t, data)
     -- body
     if t == bole.SERVER_ENTER_GAME then
         -- 目前回来协议没有返回选择的主题自己记录
-        dump(data, "AppManage", 10)
-        local isWild=false
-        if data.freespin_type==1 or data.freespin_type==6 then
-            isWild=true
+        if table.empty(data) then
+            bole.socket:send(bole.SERVER_LEAVE_THEME, {})
+            self:sendEnterTheme(self.theme_id, self.is_private)
+        else
+            bole:postEvent("enterThemeData", data)
         end
-        local newData = { freeSpin = data.free_spins,wild=isWild,freeMutiple = data.fs_multiple, freeCollect = data.fs_collect, feature_id = data.fs_type }
-        bole:postEvent("next_data", newData)
-        bole:getMiniGameControl():enterFeature(data.feature)
-        
-        bole:postEvent("enterThemeData", data)
+    elseif t== bole.COLLECT_LOGIN_REWARD then
+        if data.error==0 then
+            bole:getUIManage():popDailyGift(data.reward)
+--            bole:getUIManage():openUI("LobbyScene")
+        else
+            bole:getUIManage():openUI("LobbyScene")
+        end
+    elseif t== bole.GET_RECOMMEND_USERS then
+        bole.recommend_users=data
+        bole.recommend_index=1
+        bole.recommend_max=#data
     end
 end 
 
-function AppManage:tryPop(data)
-    self:updateUser(data)
-
-    local isPop = false
-    -- 5连
-    if data["5ofakind"] == 1 then
-        if self.theme_id ~= 5 then
---            local isCatch = { }
---            local spinApp = bole:getSpinApp()
---            for _, v in ipairs(data.win_lines) do
---                if v.feature == 0 and #v.icons >= 5 then
---                    if not isCatch[v.link] then
---                        isCatch[v.link] = v.link
---                        bole:postEvent("dialog_push", { msg = "kind", param = { theme_id = self.theme_id, link_id = v.link } })
---                    end
---                end
---            end
-            bole:postEvent("dialog_push", { msg = "kind"})
-            isPop = true
-        end
-    end
-    -- 升级
-    if data["levelup"] then
-        bole:postEvent("dialog_push", { msg = "uplevel", param = data["levelup"] })
-        isPop = true
-    end
-    -- 如果是freespin 直接返回
-    if data["isFreeSpining"] then
-        self:postDialog(isPop)
-        return isPop
-    end
-    -- freeSpin 延后事件
-    return self:tryDelayPop(data, isPop)
-
-end
---延后处理
-function AppManage:tryDelayPop(data, isPop)
-    if data["big_win"] == 1 then
-        bole:postEvent("dialog_push", { msg = "big_win", param = { score = data.fs_coins } })
-        isPop = true
-    elseif data["mega_win"] == 1 then
-        bole:postEvent("dialog_push", { msg = "mega_win", param = { score = data.fs_coins } })
-        isPop = true
-    end
-
-    self:postDialog(isPop)
-    return isPop
-end
---开始连续弹窗
-function AppManage:postDialog(isPop)
-    if isPop then
-        bole:postEvent("dialog_pop")
-    end
-end
 --spin结果
 function AppManage:spin(event)
     bole:getUIManage():closeTips()
@@ -214,8 +233,12 @@ end
 function AppManage:addCoins(coins)
     bole:getUserData():changeDataByKey("coins", tonumber(coins))
 end
+function AppManage:addDiamond(diamond)
+    bole:getUserData():changeDataByKey("diamond", tonumber(diamond))
+end
 --更新用户数据 目前放在弹窗之前
 function AppManage:updateUser(data)
+    dump(data,"AppManage:updateUser")
     if data and data.experience then
         bole:setUserDataByKey("experience",data.experience)
     end
@@ -226,6 +249,15 @@ function AppManage:sync(t, data)
         -- 目前回来协议没有返回选择的主题自己记录
         dump(data, "SERVER_B_SYNC", 10)
     end
+end
+
+function AppManage:sendPlayTogether(user_id,room_id,theme_id)
+--    self.pt_themeid=theme_id
+    bole.socket:send(bole.SERVER_PLAY_TOGETHER,{user_id=user_id,room_id=room_id,theme_id=theme_id})
+end
+function AppManage:sendAcceptIntive(user_id,room_id,theme_id)
+--    self.acci_themeid=theme_id
+    bole.socket:send(bole.ACCEPT_ROOT_INVITATION,{user_id=user_id,room_id=room_id,theme_id=theme_id})
 end
 function AppManage:room(t, data)
     dump(data,"AppManage:room:"..t)
@@ -239,6 +271,7 @@ function AppManage:room(t, data)
             return
         end
         self.theme_id=tonumber(data.theme_id)
+--        self.theme_id=tonumber(self.pt_themeid)
         self:continueGame(data)
     elseif t == bole.SEND_ROOM_INVITATION then
         if data.success then
@@ -246,9 +279,10 @@ function AppManage:room(t, data)
         end
     elseif t == bole.RECV_ROOM_INVITATION then
         bole:postEvent("chat_invitePlay",data)
-        bole:popMsg({msg=data.inviter_name.." invites you to play togethe",cancle=true},function()
-            bole.socket:send(bole.ACCEPT_ROOT_INVITATION,{room_id=data.room_id,theme_id=data.theme_id})
-        end)
+        bole:getNoticeCenter():onResponse(t,data)
+--        bole:popMsg({msg=data.inviter_name.." invites you to play together",cancle=true},function()
+--            self:sendAcceptIntive(data.inviter,data.room_id,data.theme_id)
+--        end)
     elseif t == bole.ACCEPT_ROOT_INVITATION then
         if data.error then
             if data.error==2 then
@@ -259,19 +293,22 @@ function AppManage:room(t, data)
             return
         end
         self.theme_id=tonumber(data.theme_id)
+--        self.theme_id=tonumber(self.acci_themeid)
         self:continueGame(data)
     end
 end
 
 function AppManage:fbUrl(event)
-    local url=event.result
-    local user_id=bole:getUserData().user_id
-    bole:getUrlImage(url,user_id,function(fileName, tagNum)
-        if tagNum==user_id then
-             bole:postEvent("eventImgPath",fileName)
-             bole:saveCdnUrl(fileName,user_id)
+    local url = event.result
+    local user_id = bole:getUserData().user_id
+    bole:getUrlImage(url, false, function(fileName, eventCode)
+        if eventCode == 6 then
+            bole:postEvent("eventImgPath", {fileName,eventCode})
+            bole:saveCdnUrl(user_id,fileName,true)
+            bole:setUserDataByKey("icon", "self")
+            bole:uploadUserInfo()
         end
-    end)
+    end )
 end
 
 return AppManage

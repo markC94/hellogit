@@ -9,9 +9,20 @@ ChatLayer.MaxInputLenght = 120     -- 输入框最大输入长度
 ChatLayer.MaxMsgNum = 30    -- 最大存储数
 ChatLayer.InputBoxRow = 3   -- 聊天输入框行数
 ChatLayer.Target = cc.Application:getInstance():getTargetPlatform()
+ChatLayer.fontHeight = 41
+
+ChatLayer.ViewWidth = 580
+ChatLayer.InputLabelWidth = 360.00
+ChatLayer.InputLabelHeight = 40.00
+ChatLayer.InputLabelFontSize = 36
+
+ChatLayer.InputAddHeight = 40.00
+ChatLayer.ListViewPosY = 110
 
 function ChatLayer:onCreate()
     print("ChatLayer:onCreate")
+    self.sendInfo_ = {}
+    self.chatType_ = 1
     local root = self:getCsbNode():getChildByName("root")
 
     self.touchPanel_ = root:getChildByName("Panel_touch")
@@ -27,66 +38,57 @@ function ChatLayer:onCreate()
 
     -- 适配
     self:adaptScreen(root)
-    if bole:getUserDataByKey("club") ~= 0 then
-        self:createClubBuyCell()
-    end
+    self:createClubBuyCell()
     self.runTime_ = cc.Director:getInstance():getScheduler():scheduleScriptFunc(function() self:updateCell() end, 1, false)
-    bole.socket:send("enter_club_lobby", { }, true)
-end
 
+    bole:getClubManage():getClubInfo("getClubInfo_chat")
+end
+function ChatLayer:onKeyBack()
+   self:backLayer()
+end
 function ChatLayer:onEnter()
-    self.sendInfo_ = {}
-    bole.socket:registerCmd("enter_club_lobby", self.reClub, self)
-    bole:addListener("addChatToView", self.addChatToView, self, nil, true)
+    bole:addListener("getClubInfo_chat", self.initClubInfo_chat, self, nil, true)
+    bole:addListener("addInfoInListView", self.addChatToView, self, nil, true)
+    bole:addListener("addClubTaskCellToChat", self.addClubTaskToView, self, nil, true)
 end
 
 -- 初始化聊天记录
 function ChatLayer:initChatListView()
-    self.chatManager = bole:getInstance("app.views.chat.ChatManager")
-    local chatTable = self.chatManager:getChatMsg()
+    local chatTable = bole:getChatManage():getChatMsg(1)
     if chatTable ~= nil then
         for i = 1, #chatTable do
-            if tonumber(chatTable[i].id) == tonumber(bole:getUserDataByKey("user_id")) then
-                --self:addWidgetToListView(nil, chatTable[i].msg, chatTable[i])
-            else
-                self:addWidgetToListView(chatTable[i].id, chatTable[i].msg, chatTable[i])
-            end
+            self:addWidgetToListView(chatTable[i],true)
+        end
+    end
+
+    chatTable = bole:getChatManage():getChatMsg(2)
+    if chatTable ~= nil then
+        for i = 1, #chatTable do
+            self:addWidgetToListView(chatTable[i],true)
         end
     end
 end
 
--- 聊天接收
-function ChatLayer:reChat(t, chat)
-    if t == "chat" then
-        if chat.msg ~= nil then
-            local msg = chat.msg
-            if tonumber(chat.id) == tonumber(bole:getUserDataByKey("user_id")) then
-                --self:addWidgetToListView(nil, msg, chat)
-                dump(self.sendInfo_,"self.sendInfo_")
-                if self.sendInfo_[msg] ~= nil then
-                    self.sendInfo_[msg]:removeLoading()
-                    self.sendInfo_[msg] = nil
-                end
-            else
-                self:addWidgetToListView(chat.id, msg, chat)
-            end
-        end
-    end
-end
 
 function ChatLayer:addChatToView(data)
     data = data.result
-    self:reChat(data[1], data[2])
+    if data.sender == bole:getUserDataByKey("user_id") then
+        if self.sendInfo_[data.msg] ~= nil then
+            self.sendInfo_[data.msg]:removeLoading()
+            self.sendInfo_[data.msg] = nil
+        end
+    else
+        self:addWidgetToListView(data)
+    end
+
 end
 
 function ChatLayer:initTop(root)
     self.top_ = root:getChildByName("top")
     local btn_clubChat = self.top_:getChildByName("club_chat")
     btn_clubChat:addTouchEventListener(handler(self, self.touchEvent))
-    btn_clubChat:getChildByName("text"):setString("CLUB CHAT")
     local btn_gameChat = self.top_:getChildByName("game_chat")
     btn_gameChat:addTouchEventListener(handler(self, self.touchEvent))
-    btn_gameChat:getChildByName("text"):setString("GAME CHAT")
     local btn_back = self.top_:getChildByName("btn_back")
     btn_back:addTouchEventListener(handler(self, self.touchEvent))
 
@@ -99,7 +101,7 @@ end
 
 function ChatLayer:initMiddle(root)
     self.middle_ = root:getChildByName("middle")
-    self.bg_ = self.middle_:getChildByName("middlebg")
+    self.bg_ = root:getChildByName("middlebg")
     self.chatListView_ = self.middle_:getChildByName("listView_chat")
     self.chatListView_:setScrollBarOpacity(0)
     self.clubChatListView_ =  self.middle_:getChildByName("listView_chat_club")
@@ -125,6 +127,8 @@ function ChatLayer:initBottom(root)
     btn_sendEmotion:addTouchEventListener(handler(self, self.touchEvent))
     self.panelEmotion_ = self.bottom_:getChildByName("Panel_emotion")
 
+    self.bottomBgSize_ = self.bottom_:getChildByName("bg"):getContentSize()
+    self.bottomInputBgSize_ = self.bottom_:getChildByName("inputBg"):getContentSize()
     -- 初始化输入框
     self:initInputBox()
     -- 初始化快捷聊天，表情
@@ -168,12 +172,14 @@ function ChatLayer:touchEvent(sender, eventType)
             self.chatListView_:setVisible(false)
             self:refreshTagBtnStatus(sender)
             self.clubBuyCell_:setVisible(true)
+            self.chatType_ = 2
         elseif name == "game_chat" then
             -- gamechat
             self.clubChatListView_:setVisible(false)
             self.chatListView_:setVisible(true)
             self:refreshTagBtnStatus(sender)
             self.clubBuyCell_:setVisible(false)
+            self.chatType_ = 1
         elseif name == "emotion" then
             self:sendChatContent("emotion",sender.tag)
         elseif name == "message" then
@@ -189,74 +195,47 @@ function ChatLayer:refreshTagBtnStatus(btn)
     local btn_clubChat = self.top_:getChildByName("club_chat")
     btn_clubChat:setBright(true)
     btn_clubChat:setTouchEnabled(true)
-    btn_clubChat:getChildByName("text"):setTextColor( { r = 146, g = 171, b = 230 })
+    btn_clubChat:getChildByName("txt"):setOpacity(117)
+    btn_clubChat:getChildByName("icon"):setOpacity(117)
+
     if bole:getUserDataByKey("club") == 0 then
         btn_clubChat:setTouchEnabled(false)
     end
     local btn_gameChat = self.top_:getChildByName("game_chat")
     btn_gameChat:setBright(true)
     btn_gameChat:setTouchEnabled(true)
-    btn_gameChat:getChildByName("text"):setTextColor( { r = 146, g = 171, b = 230 })
+    btn_gameChat:getChildByName("txt"):setOpacity(117)
+    btn_gameChat:getChildByName("icon"):setOpacity(117)
+
     btn:setBright(false)
     btn:setTouchEnabled(false)
-    btn:getChildByName("text"):setTextColor( { r = 227, g = 254, b = 255 })
+    btn:getChildByName("txt"):setOpacity(255)
+    btn:getChildByName("icon"):setOpacity(255)
 end
 
 
 
 -- 添加聊天信息
-function ChatLayer:addWidgetToListView(uid, chatString, chatTable)
-    local chatWidget = bole:getEntity("app.views.chat.ChatCell", uid, chatString, chatTable)
-    if uid == nil then
-        self.sendInfo_[chatString] = chatWidget
+function ChatLayer:addWidgetToListView(chat,isInitMsg)
+    local msg = chat.msg
+    local chatWidget = bole:getEntity("app.views.chat.ChatCell", chat,isInitMsg)
+    if chat.sender == bole:getUserDataByKey("user_id") then
+        self.sendInfo_[msg] = chatWidget
     end
-    if chatTable.chatType == 1 then
+
+    if chat.c_type == 1 then
         self.chatListView_:pushBackCustomItem(chatWidget)
         if #self.chatListView_:getItems() > ChatLayer.MaxMsgNum then
             self.chatListView_:removeItem(0)
         end
         self.chatListView_:jumpToBottom()
-    elseif chatTable.chatType == 2 then
+    elseif chat.c_type == 2 then
         self.clubChatListView_:pushBackCustomItem(chatWidget)
         if #self.clubChatListView_:getItems() > ChatLayer.MaxMsgNum then
             self.clubChatListView_:removeItem(0)
         end
         self.clubChatListView_:jumpToBottom()
     end
-end
-
--- 在过长字符中间加入'\n'
--- str 字符串
--- fontSize 字符大小
--- maxLen 每行最大长度
-function ChatLayer:getNewStr(str, fontSize, maxLen)
-    -- 待优化
-    str = str or ""
-    fontSize = fontSize or 28
-    maxLen = maxLen or 446
-    local t = string.split(str, " ")
-    local newStr = ""
-    for i = 1, #t do
-        if cc.Label:createWithTTF(t[i], "res/font/FZKTJW.TTF", fontSize):getContentSize().width > maxLen then
-            local idex = 1
-            local time = 0
-            for ii = 1, string.len(t[i]) do
-                local len = cc.Label:createWithTTF(string.sub(t[i], idex, ii + time), "res/font/FZKTJW.TTF", fontSize):getContentSize().width
-                if len > maxLen then
-                    t[i] = string.sub(t[i], 1, ii + time - 1) .. "\n" .. string.sub(t[i], ii + time, -1)
-                    len = 0
-                    idex = ii + 1
-                    time = time + 1
-                end
-            end
-        end
-        if i == 1 then
-            newStr = newStr .. t[i]
-        else
-            newStr = newStr .. " " .. t[i]
-        end
-    end
-    return newStr
 end
 
 function ChatLayer:editBoxHandEvent(eventName, sender)
@@ -286,19 +265,20 @@ end
 -- 自定义输入框
 function ChatLayer:initInputBox()
     self.chatTextRow_ = 0
-    self.inputLabel_ = cc.Label:createWithTTF(" ", "res/font/FZKTJW.TTF", 36)
+    self.inputLabel_ = cc.Label:createWithTTF(" ", "font/bole_ttf.ttf", self.InputLabelFontSize)
     self.inputLabel_:setAnchorPoint(0, 0)
     self.inputLabel_:setPosition(0, 0)
-    self.inputLabel_:setDimensions(446, 0)
+    self.inputLabel_:setDimensions(self.InputLabelWidth, 0)
     self.inputLabel_:setHorizontalAlignment(0)
     -- 左对齐
     self.textListView_:addChild(self.inputLabel_)
-    self.editBox_ = ccui.EditBox:create(cc.size(486, 64), "res/chat/chat_input.png")
+    self.editBox_ = ccui.EditBox:create(cc.size(300, 30), "loadImage/editBox_bg.png")
     self.bottom_:getChildByName("Panel"):addChild(self.editBox_)
     self.editBox_:setAnchorPoint(0, 0)
     self.editBox_:setFontSize(36)
     self.editBox_:setFontColor(cc.c3b(255, 255, 255))
     self.editBox_:setInputMode(cc.EDITBOX_INPUT_MODE_SINGLELINE)
+    self.editBox_:setInputFlag(cc.EDITBOX_INPUT_FLAG_INITIAL_CAPS_WORD)
     self.editBox_:setMaxLength(ChatLayer.MaxInputLenght)
     self.editBox_:setPosition(20, 15)
     self.editBox_:setReturnType(cc.KEYBOARD_RETURNTYPE_SEND)
@@ -317,17 +297,18 @@ function ChatLayer:inputBoxTouchEvent(sender, eventType)
     elseif eventType == ccui.TouchEventType.moved then
         self.moved_ = self.moved_ + 1
     elseif eventType == ccui.TouchEventType.ended then
-        if self.moved_ < 8 then
+        if self.moved_ < 5 then
             self.editBox_:touchDownAction(self.editBox_, 2)
             self.textListView_:scrollToBottom(0, true)
         end
         self.moved_ = 0
     elseif eventType == ccui.TouchEventType.canceled then
+        
     end
 end
 
 function ChatLayer:refreshInputBox(str)
-    self.inputLabel_:setString(self:getNewStr(str, 36, 458))
+    self.inputLabel_:setString( bole:getNewStr(str, self.InputLabelFontSize, self.InputLabelWidth))
     -- print(self.inputLabel_:getString())
     local height = self.inputLabel_:getContentSize().height
 
@@ -340,79 +321,79 @@ function ChatLayer:refreshInputBox(str)
         listView = self.clubChatListView_
         listViewHeight = self.clubChatListViewHeight_
     end
-
-    if height > 50 and height <= 78 then
+    print(height)
+    if height > 50 and height <= self.fontHeight * 2 then
         if self.chatTextRow_ ~= 2 then
             self.chatTextRow_ = 2
-            self.bottom_:getChildByName("bg"):setContentSize(670, 130)
-            self.bottom_:getChildByName("inputBg"):setContentSize(486, 104)
-            self.textListView_:setContentSize(460, 80)
-            self.textListView_:setInnerContainerSize(cc.size(460, 80))
-            self:upTextField(140,listView)
-            listView:setContentSize(670, listViewHeight - 40)
+            self.bottom_:getChildByName("bg"):setContentSize(self.bottomBgSize_.width, self.bottomBgSize_.height + self.InputAddHeight)
+            self.bottom_:getChildByName("inputBg"):setContentSize(self.bottomInputBgSize_.width, self.bottomInputBgSize_.height + self.InputAddHeight)
+            self.textListView_:setContentSize(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight)
+            self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight))
+            self:upTextField(self.ListViewPosY + self.InputAddHeight,listView)
+            listView:setContentSize(self.ViewWidth, listViewHeight - self.InputAddHeight)
             listView:jumpToBottom()
         end
-    elseif height > 78 and height <= 117 then
+    elseif height > self.fontHeight * 2 and height <= self.fontHeight * 3 then
         if self.chatTextRow_ ~= 3 then
             self.chatTextRow_ = 3
-            self.bottom_:getChildByName("bg"):setContentSize(670, 170)
-            self.bottom_:getChildByName("inputBg"):setContentSize(486, 144)
-            self.textListView_:setContentSize(460, 120)
-            self.textListView_:setInnerContainerSize(cc.size(460, 120))
-            self:upTextField(180,listView)
-            listView:setContentSize(670, listViewHeight - 80)
+            self.bottom_:getChildByName("bg"):setContentSize(self.bottomBgSize_.width, self.bottomBgSize_.height + self.InputAddHeight * 2)
+            self.bottom_:getChildByName("inputBg"):setContentSize(self.bottomInputBgSize_.width, self.bottomInputBgSize_.height + self.InputAddHeight * 2)
+            self.textListView_:setContentSize(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 2)
+            self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 2))
+            self:upTextField(self.ListViewPosY + self.InputAddHeight * 2,listView)
+            listView:setContentSize(self.ViewWidth, listViewHeight - self.InputAddHeight * 2)
             listView:jumpToBottom()
         end
-    elseif height > 117 and height <= 156 then
+    elseif height > self.fontHeight * 3 and height <= self.fontHeight * 4 then
         if ChatLayer.InputBoxRow == 4 then
             if self.chatTextRow_ ~= 4 then
                 self.chatTextRow_ = 4
-                self.bottom_:getChildByName("bg"):setContentSize(670, 210)
-                self.bottom_:getChildByName("inputBg"):setContentSize(486, 184)
-                self.textListView_:setContentSize(460, 160)
-                self.textListView_:setInnerContainerSize(cc.size(460, 160))
-                self:upTextField(220,listView)
-                listView:setContentSize(670, listViewHeight - 120)
+                self.bottom_:getChildByName("bg"):setContentSize(self.bottomBgSize_.width, self.bottomBgSize_.height + self.InputAddHeight * 3)
+                self.bottom_:getChildByName("inputBg"):setContentSize(self.bottomInputBgSize_.width, self.bottomInputBgSize_.height + self.InputAddHeight * 3)
+                self.textListView_:setContentSize(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 3)
+                self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 3))
+                self:upTextField(self.ListViewPosY + self.InputAddHeight * 3,listView)
+                listView:setContentSize(self.ViewWidth, listViewHeight - self.InputAddHeight * 3)
                 listView:jumpToBottom()
             end
         elseif ChatLayer.InputBoxRow == 3 then
             if self.chatTextRow_ ~= 4 then
                 self.chatTextRow_ = 4
-                self.bottom_:getChildByName("bg"):setContentSize(670, 170)
-                self.bottom_:getChildByName("inputBg"):setContentSize(486, 144)
-                self.textListView_:setContentSize(460, 120)
-                self.textListView_:setInnerContainerSize(cc.size(460, 120))
-                self:upTextField(180,listView)
-                listView:setContentSize(670, listViewHeight - 80)
+                self.bottom_:getChildByName("bg"):setContentSize(self.bottomBgSize_.width, self.bottomBgSize_.height + self.InputAddHeight * 2)
+                self.bottom_:getChildByName("inputBg"):setContentSize(self.bottomInputBgSize_.width, self.bottomInputBgSize_.height + self.InputAddHeight * 2)
+                self.textListView_:setContentSize(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 2)
+                self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 2))
+                self:upTextField(self.ListViewPosY + self.InputAddHeight * 2,listView)
+                listView:setContentSize(self.ViewWidth, listViewHeight - self.InputAddHeight * 2)
                 listView:jumpToBottom()
             end
-            self.textListView_:setInnerContainerSize(cc.size(460, height))
+            self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, height))
             self.textListView_:scrollToBottom(0, true)
         end
-    elseif height > 156 then
+    elseif height > self.fontHeight * 4 then
         if ChatLayer.InputBoxRow == 4 then
             if self.chatTextRow_ ~= 5 then
                 self.chatTextRow_ = 5
-                self.bottom_:getChildByName("bg"):setContentSize(670, 210)
-                self.bottom_:getChildByName("inputBg"):setContentSize(486, 184)
-                self.textListView_:setContentSize(460, 160)
-                self:upTextField(220,listView)
-                listView:setContentSize(670, listViewHeight - 120)
+                self.bottom_:getChildByName("bg"):setContentSize(self.bottomBgSize_.width, self.bottomBgSize_.height + self.InputAddHeight * 3)
+                self.bottom_:getChildByName("inputBg"):setContentSize(self.bottomInputBgSize_.width, self.bottomInputBgSize_.height + self.InputAddHeight * 3)
+                self.textListView_:setContentSize(self.InputLabelWidth, self.InputLabelHeight + self.InputAddHeight * 3)
+                self:upTextField(self.ListViewPosY + self.InputAddHeight * 3,listView)
+                listView:setContentSize(self.ViewWidth, listViewHeight - self.InputAddHeight * 3)
                 listView:jumpToBottom()
             end
         end
-        self.textListView_:setInnerContainerSize(cc.size(460, height))
+        self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, height))
         self.textListView_:scrollToBottom(0, true)
 
     else
         if self.chatTextRow_ ~= 1 then
             self.chatTextRow_ = 1
-            self.bottom_:getChildByName("bg"):setContentSize(670, 90)
-            self.bottom_:getChildByName("inputBg"):setContentSize(486, 64)
-            self.textListView_:setContentSize(460, 40)
-            self.textListView_:setInnerContainerSize(cc.size(460, 40))
-            self:upTextField(100,listView)
-            listView:setContentSize(670, listViewHeight)
+            self.bottom_:getChildByName("bg"):setContentSize(self.bottomBgSize_.width, self.bottomBgSize_.height)
+            self.bottom_:getChildByName("inputBg"):setContentSize(self.bottomInputBgSize_.width, self.bottomInputBgSize_.height)
+            self.textListView_:setContentSize(self.InputLabelWidth, self.InputLabelHeight)
+            self.textListView_:setInnerContainerSize(cc.size(self.InputLabelWidth, self.InputLabelHeight))
+            self:upTextField(self.ListViewPosY,listView)
+            listView:setContentSize(self.ViewWidth, listViewHeight)
             listView:jumpToBottom()
         end
     end
@@ -441,7 +422,7 @@ function ChatLayer:initEmotion()
             end
         end
         if self.panelSend_:isVisible() then
-            if not cc.rectContainsPoint(cc.rect(400, 70, 280, 380), touchPos) then
+            if not cc.rectContainsPoint(cc.rect(320, 95, 260, 350), touchPos) then
                 self.panelSend_:setVisible(false)
             end
         end
@@ -454,54 +435,48 @@ function ChatLayer:initEmotion()
     self:addChild(layer)
 
     -- TODO初始化表情,快捷语句
-    self.emotionListView_ = self.panelEmotion_:getChildByName("ListView")
-    self.emotionListView_:setScrollBarOpacity(0)
     self:createEmotionView()
-    self.sendListView_ = self.panelSend_:getChildByName("ListView")
-    self.sendListView_:setScrollBarOpacity(0)
     self:createChatView()
 end
 
 function ChatLayer:createEmotionView()
     for i = 1, 8 do
         local emotionWidget = ccui.Layout:create()
-        --self.panelEmotion_:getChildByName("emotion"):clone()
-        emotionWidget:setContentSize(80,70)
+        emotionWidget:setContentSize(80,80)
         emotionWidget:setVisible(true)
+        emotionWidget:setAnchorPoint(0,0)
         emotionWidget:setTouchEnabled(true)
         emotionWidget:setName("emotion")
-        --[[
-        local image = ccui.ImageView:create()
-        image:setName("Image")
-        image:setPosition(40,35)
-        emotionWidget:addChild(image)
-        emotionWidget:getChildByName("Image"):loadTexture("res/chat/chat_button_emotion.png")
-        --emotionWidget:getChildByName("Image"):loadTexture("res/emotion/" .. i ..  ".png")
-        --]]
         emotionWidget.tag = "#emotion" .. i
         emotionWidget:addTouchEventListener(handler(self, self.touchEvent))
-
 
         local skeletonNode = sp.SkeletonAnimation:create("emotion/skeleton.json", "emotion/skeleton.atlas")
         skeletonNode:setAnimation(0, i, true)
         skeletonNode:setPosition(cc.p(40,35))
         emotionWidget:addChild(skeletonNode,1)
 
-
-        self.emotionListView_:pushBackCustomItem(emotionWidget)
+        self.panelEmotion_:addChild(emotionWidget)
+        if i <= 4 then
+            emotionWidget:setPosition((i - 1) * 80, 100)
+        else
+            emotionWidget:setPosition((i - 5) * 80, 20)
+        end
     end
 end
 
 function ChatLayer:createChatView()
     local message = bole:getConfigCenter():getConfig("short_message")
+    local i = 0
     for k, v in pairs(message) do
-        local sendWidget = self.panelSend_:getChildByName("send"):clone()
-        sendWidget:setVisible(true)
-        sendWidget:setName("message")
-        sendWidget.tag = v.message_texts
-        sendWidget:getChildByName("Text"):setString(v.key_words)
-        sendWidget:addTouchEventListener(handler(self, self.touchEvent))
-        self.sendListView_:pushBackCustomItem(sendWidget)
+        i = i + 1
+        local sendWidget = self.panelSend_:getChildByName("txt_" .. i)
+        if sendWidget ~= nil then
+            sendWidget:getChildByName("txt"):setString(v.key_words)
+            sendWidget:setVisible(true)
+            sendWidget:setName("message")
+            sendWidget.tag = v.message_texts
+            sendWidget:addTouchEventListener(handler(self, self.touchEvent))
+        end
     end
 end
 
@@ -515,12 +490,12 @@ function ChatLayer:backLayer()
             self:getEventDispatcher():removeEventListener(self.touchListener_)
             self.touchListener_ = nil
         end
-        self.chatManager:removeChatLayer()
+        self.chatManage:removeChatLayer()
         self:removeFromParent()
         --]]
         self:setVisible(false)
     end
-
+    bole:getChatManage():cleanNewMessageNum()
     self.chatView_:runAction(cc.Sequence:create(cc.MoveTo:create(0.2, cc.p(-720, 0)), cc.CallFunc:create(removeFunc)))
 
 
@@ -530,6 +505,7 @@ end
 function ChatLayer:createEventListenerKeyboard()
     local listener = cc.EventListenerKeyboard:create()
     local function onKeyReleased(keyCode, event)
+        print(keyCode)
         if keyCode == 164 then
             self:sendChatContent("str")
         end
@@ -560,16 +536,21 @@ function ChatLayer:sendChatContent(str,data)
             self.inputLabel_:setString("")
             self.editBox_:setText("")
             self:refreshInputBox("")
+
+            if chatString == "+===+" then
+                bole:setTestUser()
+                return
+            end
+
+            if chatString == "-===-" then
+                bole:removeTestUser()
+                return
+            end
+
             if chatString ~= "" then
                 chatString = string.gsub(chatString, "\n", "")
-                local t = 1
-                if self.chatListView_:isVisible() then
-                    t = 1
-                elseif self.clubChatListView_:isVisible() then
-                    t = 2
-                end
-                self:addWidgetToListView(nil, chatString,{ type = "chat" , chatType = t, id = bole:getUserDataByKey("user_id") , msg = chatString, isFormat = false})
-                bole.socket:send("chat", { c_type = t, msg = chatString })
+                self:addWidgetToListView({ c_type = self.chatType_ , sender = bole:getUserDataByKey("user_id") , msg = chatString, isFormat = false , infoType = "chat"})
+                bole.socket:send("chat", { c_type = self.chatType_ , msg = chatString })
             else
                 print("非法输入")
             end
@@ -577,26 +558,25 @@ function ChatLayer:sendChatContent(str,data)
         end
     
         if str == "emotion" or str ==  "message" then
-           local t = 1
-           if self.chatListView_:isVisible() then
-                t = 1
-           elseif self.clubChatListView_:isVisible() then
-                t = 2
-           end
-            self:addWidgetToListView(nil, data,{ type = "chat" , chatType = t, id = bole:getUserDataByKey("user_id") , msg = data, isFormat = false})
-            bole.socket:send("chat", { c_type = t, msg = data })
+            self:addWidgetToListView({ c_type = self.chatType_ , sender = bole:getUserDataByKey("user_id") , msg = data, isFormat = false, infoType = "chat"})
+            bole.socket:send("chat", { c_type = self.chatType_, msg = data })
       
             self.panelEmotion_:setVisible(false)
             self.panelSend_:setVisible(false)
         end
-    
+
+
     end
-    
 end
 
 function ChatLayer:onExit()
-    bole:getEventCenter():removeEventWithTarget("addChatToView", self)
-    bole.socket:unregisterCmd("enter_club_lobby")
+    bole:getEventCenter():removeEventWithTarget("addInfoInListView", self)
+    bole:getEventCenter():removeEventWithTarget("getClubInfo_chat", self)
+    bole:getEventCenter():removeEventWithTarget("addClubTaskCellToChat", self)
+    
+    if self.chatClubTaskCell_ ~= nil then
+        self.chatClubTaskCell_:removeListener()
+    end
     for _,v in pairs(self.chatListView_:getItems()) do
         if v.removeLoading ~= nil then
             v:removeLoading()
@@ -607,17 +587,31 @@ function ChatLayer:onExit()
     end
 end
 
-function ChatLayer:reClub(t,data)
+function ChatLayer:initClubInfo_chat(data)
+    data = data.result
     if data.in_club == 1 then
+        if self.addChatClubTaskCell_ then
+            self.chatClubTaskCell_:refreshInfo(data.club_info)
+            self.addChatClubTaskCell_ = false
+            return
+        end
         self.clubBuyCell_:refrushClubBuy(data.club_info)
+        if data.club_info.rewards[1].collect ~= 0 then
+           self.chatClubTaskCell_ = bole:getEntity("app.views.chat.ChatClubTaskCell")
+           self.chatClubTaskCell_:refreshInfo(data.club_info)
+           self.clubChatListView_:pushBackCustomItem(self.chatClubTaskCell_)
+           self.clubChatListView_:jumpToBottom()
+        end
     end
 end
 
 function ChatLayer:createClubBuyCell(data)
-    self.clubBuyCell_ = bole:getEntity("app.views.club.ClubBuyCell",data,"inChat")
-    self.middle_:addChild(self.clubBuyCell_)
-    self.clubBuyCell_:setPositionY(110 + self.clubChatListViewHeight_)
-    self.clubBuyCell_:setVisible(false)
+    if bole:getUserDataByKey("club") ~= 0 then
+        self.clubBuyCell_ = bole:getEntity("app.views.club.ClubBuyCell","inChat")
+        self.middle_:addChild(self.clubBuyCell_)
+        self.clubBuyCell_:setPositionY(110 + self.clubChatListViewHeight_ + 20)
+        self.clubBuyCell_:setVisible(false)
+    end
 end
 
 -- 适配
@@ -626,18 +620,19 @@ function ChatLayer:adaptScreen(root)
     local test = cc.Director:getInstance():getOpenGLView():getFrameSize()
     self.bottom_:setPosition(0, 0)
     self.middle_:setPosition(0, 0)
-    self.middle_:setContentSize(670, winSize.height - 62)
+    self.middle_:setContentSize(self.ViewWidth, winSize.height - 62)
     self.top_:setPosition(0, winSize.height)
-    self.bg_:setContentSize(670, winSize.height - 62)
-    self.chatListViewHeight_ = winSize.height - 100 - 62 - 15
-    self.clubChatListViewHeight_ = winSize.height - 100 - 62 - 15 - 110
-    self.chatListView_:setPosition(0, 100)
-    self.chatListView_:setContentSize(670, self.chatListViewHeight_)
-    self.clubChatListView_:setPosition(0, 100)
-    self.clubChatListView_:setContentSize(670, self.clubChatListViewHeight_)
+    self.bg_:setContentSize(self.ViewWidth, winSize.height)
+    self.chatListViewHeight_ = winSize.height - self.ListViewPosY - 62 - 15
+    self.clubChatListViewHeight_ = winSize.height - self.ListViewPosY - 62 - 15 - 110
+    self.chatListView_:setPosition(0, self.ListViewPosY)
+    self.chatListView_:setContentSize(self.ViewWidth, self.chatListViewHeight_)
+    self.clubChatListView_:setPosition(0, self.ListViewPosY)
+    self.clubChatListView_:setContentSize(self.ViewWidth, self.clubChatListViewHeight_)
     
-    root:setContentSize(winSize)
-    self.touchPanel_:setContentSize(winSize)
+    self.chatView_:setContentSize(640,winSize.height)
+    root:setContentSize(640,winSize.height)
+    self.touchPanel_:setContentSize(640,winSize.height)
 end
 
 function ChatLayer:updateCell()
@@ -646,14 +641,21 @@ function ChatLayer:updateCell()
             v:update()
         end
     end
-    for _,v in pairs(self.clubChatListView_:getItems()) do
-        if v.update ~= nil then
-            v:update()
-        end
-    end
 end
 
-
+function ChatLayer:addClubTaskToView(data)
+   if self.chatClubTaskCell_ ~= nil then
+        self.chatClubTaskCell_:removeFromParent()
+        self.chatClubTaskCell_ = nil
+   end
+   if self.clubChatListView_ ~= nil then
+       self.chatClubTaskCell_ = bole:getEntity("app.views.chat.ChatClubTaskCell")
+       self.clubChatListView_:pushBackCustomItem(self.chatClubTaskCell_)
+       self.clubChatListView_:jumpToBottom()
+       self.addChatClubTaskCell_ = true
+       bole:getClubManage():getClubInfo("getClubInfo_chat")
+   end
+end
 
 
 return ChatLayer

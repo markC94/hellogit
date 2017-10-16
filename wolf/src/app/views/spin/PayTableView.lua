@@ -5,6 +5,8 @@
 local PayTableView = class("PayTableView", cc.load("mvc").ViewBase)
 function PayTableView:ctor(themeId)
     self.themeId = themeId
+    --临时
+    self.themeId = 2
     local rootNode = cc.CSLoader:createNodeWithVisibleSize("csb/spin/payTableView.csb")
     self:addChild(rootNode)
     self.index = 1
@@ -59,13 +61,13 @@ end
 function PayTableView:changeView()
     local backView = self.backView
     if not backView then
-        self.backView = cc.Sprite:create(string.format("theme/theme%s/payTable/1.png", self.themeId))
+        self.backView = cc.Sprite:create(bole:getSpinApp():getRes(self.themeId, "payTable/1.png"))
         self.bg:addChild(self.backView)
         self.backView:setPosition(self.bg:getContentSize().width/2, 240)
         return
     end
 
-    backView:setTexture(string.format("theme/theme%s/payTable/%s.png", self.themeId, self.index))
+    backView:setTexture(bole:getSpinApp():getRes(self.themeId, string.format("payTable/%s.png", self.index)))
 end
 
 return PayTableView

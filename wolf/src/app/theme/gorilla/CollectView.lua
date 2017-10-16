@@ -1,4 +1,4 @@
---region *.lua
+  --region *.lua
 --Date
 --此文件由[BabeLua]插件自动生成
 
@@ -15,9 +15,11 @@ function CollectView:ctor(theme, collectMaxCount, collectProgress, collectCoin, 
     self.skeletonCache = {}
     self.callbackData = {}
 
-    local root = cc.CSLoader:createNode("csb/theme/gorilla/collectNode.csb")
+    local app = theme:getSpinApp()
+    local themeId = theme:getThemeId()
+    local root = cc.CSLoader:createNode(app:getMiniRes(themeId, "collect/collectNode.csb"))
     self.collectNode = root
-
+    
     root:registerScriptHandler(function(state)
         if state == "enter" then
             self:onEnter()
@@ -26,17 +28,18 @@ function CollectView:ctor(theme, collectMaxCount, collectProgress, collectCoin, 
         end
     end)
 
-    self:setViews(root)
+    self:setViews(root)  
     theme:addChild(root, order, order)
     root:setPosition(position.x, position.y)
+    bole:getUIManage():addTips(root,theme:getThemeId(),420,-70)
 end
 
 function CollectView:onEnter()
-    self.isDead = false
     bole:addListener("spin", self.onSpin, self, nil, true)
     bole:addListener("collectButterFly", self.onCollect, self, nil, true)
     bole:addListener("startFreeSpin", self.onStartFreeSpin, self, nil, true)
     bole:addListener("stopFreeSpin", self.onStopFreeSpin, self, nil, true)
+    bole:addListener("gorillaAfterMini", self.onAfterMiniGame, self, nil, true)
 end
 
 function CollectView:onExit()
@@ -44,7 +47,7 @@ function CollectView:onExit()
     bole:removeListener("collectButterFly", self)
     bole:removeListener("startFreeSpin", self)
     bole:removeListener("stopFreeSpin", self)
-    self.isDead = false
+    bole:removeListener("gorillaAfterMini", self)
 end
 
 function CollectView:onSpin(event)
@@ -61,9 +64,9 @@ end
 
 function CollectView:onCollectEnd(data)
     self.butterflyAnimNode:setAnimation(0, "animation", false)
-    bole:getAudioManage():playEff("gorilla_collection2") --蝴蝶飞到位置的音效
+    bole:getAudioManage():playAudioOnly("w2") --蝴蝶飞到位置的音效
     self:startProgressBar(self:getPercent(true))
-    bole:runNum(self.lightCollectCoinNum, self.collectCoin-self.addCoin, self.collectCoin, ProgressTime)
+    bole:runNum(self.lightCollectCoinNum, self.collectCoin-self.addCoin, self.collectCoin, ProgressTime,nil,nil,nil,"$")
     self.butterflyAnimNode:registerSpineEventHandler(function(event)
         if event.animation == "animation" then
             if data and data.callbackFunc then
@@ -78,45 +81,37 @@ function CollectView:onCollectEnd(data)
     end , sp.EventType.ANIMATION_COMPLETE)
 end
 
-function CollectView:onEndCallbackFunc()
-    bole:postEvent("collectButterFlyEnd")
-end
-
-function CollectView:afterMiniGame()
-    print("CollectView:afterMiniGame")
+function CollectView:onAfterMiniGame(event)
+    print("CollectView:onAfterMiniGame")
     if self.collectProgress >= self.collectMaxCount then
         self.collectProgress = self.collectProgress - self.collectMaxCount
         self.collectCoin = 0
-        self.lightCollectCoinNum:setString(0)
+        self.lightCollectCoinNum:setString("$0")
         self:startProgressBar(0)
     end
 end
 
-function CollectView:getEndCallbackEvent()
+function CollectView:getEndCallbackEvent(func)
     local callbackData = {}
-    callbackData.callbackFunc = self.onEndCallbackFunc
+    callbackData.callbackFunc = func
     self.callbackData = callbackData
     return callbackData
 end
 
 function CollectView:onCollect(event)
     local data = event.result
-
     if not data.collectProgress then
-        self:onEndCallbackFunc()
         return
     end
 
-    self.addCoin = self.collectCoin - data.collectCoin
+    self.addCoin = data.collectCoin-self.collectCoin
     self.collectCoin = data.collectCoin
     self.collectProgress = data.collectProgress
-    
-    local callbackData = self:getEndCallbackEvent()
-    bole:getAudioManage():playEff("gorilla_collection1") --触发收集的蝴蝶时候的音效
+    local callbackData = self:getEndCallbackEvent(data.backFunc)
     for index, pos in ipairs(data.pos[1].pos) do
         local skeletonNode = self.skeletonCache[index]
-        if not skeletonNode then
-            skeletonNode = self.theme:getSkeletonNodeByPos(pos[1], pos[2], "trigger")
+        if not skeletonNode or not skeletonNode:isVisible() then
+            skeletonNode = self.theme:genSkeletonNodeByPos(pos[1], pos[2], "trigger")
             self.skeletonCache[index] = skeletonNode
             self.collectNode:addChild(skeletonNode)
         else
@@ -132,15 +127,15 @@ function CollectView:onCollect(event)
         skeletonNode:addAnimation(0, "fly", true)
 
         local playMoveAction = function()
-            local moveAction = cc.MoveTo:create(0.8, self.flyPosition)
-            local scaleAction = cc.ScaleTo:create(0.8, 0.4)
+            local moveAction = cc.MoveTo:create(0.6, self.flyPosition)
+            local scaleAction = cc.ScaleTo:create(0.6, 0.4)
             local callAction = cc.CallFunc:create(function()
                 skeletonNode:setVisible(false)
                 if index == 1 then
                     self:onCollectEnd(callbackData)
                 end
             end)
-
+            bole:getAudioManage():playAudioOnly("w3") --触发收集的蝴蝶时候的音效
             skeletonNode:runAction(cc.Sequence:create(cc.Spawn:create(moveAction, scaleAction), callAction))
         end
 
@@ -152,33 +147,18 @@ function CollectView:onCollect(event)
     end
 end
 
---function CollectView:setCollectData(coin, curProgress)
---    if curProgress > self.collectMaxCount then
---        curProgress = self.collectMaxCount
---    end
-
---    local rate = curProgress / self.collectMaxCount * 100
---    self.collectProgressBar:setPercent(rate)
-
---    local posX = rate * self.ratePos
---    self.collectWalkNode:setPositionX(0.4 + posX)
---    self.collectProgress = curProgress
-
---    self.collectCoinNum:setString(coin)
---end
-
 function CollectView:setLightVisible(flag)
     self.lightNode:setVisible(flag)
     self.grayNode:setVisible(not flag)
 
     local rate = self.collectProgress/self.collectMaxCount*100
     if flag then
-        self:startProgressBar(0)
-        bole:runNum(self.lightCollectCoinNum, 0, self.collectCoin, ProgressTime)
+        self:startProgressBar(rate, true)
+        bole:runNum(self.lightCollectCoinNum, 0, self.collectCoin, ProgressTime,nil,nil,nil,"$")
     else
         self.remainTime = 0
         self:setPercent(rate, false)
-        self.grayCollectCoinNum:setString(self.collectCoin)
+        self.grayCollectCoinNum:setString("$"..self.collectCoin)
     end
 end
 
@@ -202,19 +182,20 @@ function CollectView:getPercent(flag)
     end
 end
 
-function CollectView:startProgressBar(startValue)
-    self.remainTime = ProgressTime
+function CollectView:startProgressBar(startValue, notGrowing)
     self:setPercent(startValue, true)
-    self.addValuePerSecond = (self.collectProgress/self.collectMaxCount*100 - startValue)/self.remainTime
     self.animNode1:setVisible(true)
     self.animNode2:setVisible(true)
-    self:registerUpdate()
+
+    if not notGrowing then
+        self.remainTime = ProgressTime
+        self.addValuePerSecond = (self.collectProgress/self.collectMaxCount*100 - startValue)/self.remainTime
+        self:registerUpdate()
+    end
 end
 
 function CollectView:updateProgressBar(dt)
     if self.remainTime <= 0 then
-        self.animNode1:setVisible(false)
-        self.animNode2:setVisible(false)
         self:unregisterUpdate()
         return
     end
@@ -253,8 +234,7 @@ function CollectView:setViews(root)
     local node = lightNode:getChildByName("icon")
     local x, y = node:getPosition()
     self.flyPosition = cc.p(x, y)
-    local projectName = "colect2"
-    local skeletonNode = sp.SkeletonAnimation:create(string.format("theme/theme%s/symbolAnimal/%s.json", self.theme:getThemeId(), projectName), string.format("theme/theme%s/symbolAnimal/%s.atlas", self.theme:getThemeId(), projectName))
+    local skeletonNode = sp.SkeletonAnimation:create(self.theme:getSpinApp():getSymbolAnim(self.theme:getThemeId(), "colect2"))
     node:addChild(skeletonNode)
     self.butterflyAnimNode = skeletonNode
 

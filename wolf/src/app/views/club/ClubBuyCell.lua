@@ -2,24 +2,31 @@
 --Date
 --此文件由[BabeLua]插件自动生成
 local ClubBuyCell = class("ClubBuyCell", cc.Node)
-function ClubBuyCell:ctor(data,type)
+local multiplier = 0.05
+local clubBuyId = 1032
+
+function ClubBuyCell:ctor(type)
+    local buyCell 
     if type == "inClub" then
-        self.node_ = cc.CSLoader:createNode("csb/club_cell/ClubBuyCell.csb")
+        buyCell = cc.CSLoader:createNode("club/ClubBuyCell.csb")
     elseif type == "inChat" then
-        self.node_ = cc.CSLoader:createNode("csb/chat/ChatClubBuyCell.csb")
+        buyCell = cc.CSLoader:createNode("inSlot_chat/ChatClubBuyCell.csb")
     end
 
-    self:addChild(self.node_)
-    local root = self.node_:getChildByName("root")
-    self.clubInfo_ = data
-
+    self:addChild(buyCell)
+    local root = buyCell:getChildByName("root")
+    self.root_ = root
     local btn_buy = root:getChildByName("btn_buy")
     btn_buy:addTouchEventListener(handler(self, self.touchEvent))
     self.price_ = btn_buy:getChildByName("txt_buy")
     self.coinsNum_ = root:getChildByName("img_icon_bg"):getChildByName("txt_coins")
     self.multiplier_ = root:getChildByName("txt_buy_tips")
-    --self:refrushClubBuy(data)
+    self.multiplier2_ = root:getChildByName("txt_buy_tips2")
+    self.num_coins_ = root:getChildByName("txt_coins_0")
+    self.cellType_ = type
+    --self:refrushClubBuy()
 end
+
 function ClubBuyCell:touchEvent(sender, eventType)
     local name = sender:getName()
     if eventType == ccui.TouchEventType.began then
@@ -39,25 +46,31 @@ function ClubBuyCell:touchEvent(sender, eventType)
 end
 
 
-function ClubBuyCell:refrushClubBuy(data)
-     self.clubInfo_ = data
-    local id = tonumber(self.clubInfo_.level) + 1000
+function ClubBuyCell:refrushClubBuy()
     self.rfm_ = tonumber(bole:getUserDataByKey("purchase_level"))
-    self.showInfo_ = {}
-    self.showInfo_.num = bole:getConfigCenter():getConfig("club_sale", id , "coins_amount")
-    self.showInfo_.multiplier = bole:getConfigCenter():getConfig("club_sale", id , "gift_multiplier")
-    self.showInfo_.price =  bole:getConfigCenter():getConfig("price", bole:getConfigCenter():getConfig("club_sale", id , "price_id"), "price")
+    self.showInfo_ = { }
+    local buyList = bole:getBuyManage():getPriceDataById(clubBuyId)
+    self.showInfo_.commodity_id = buyList.commodity_id
+    self.showInfo_.num = buyList.coins_amount
+    self.showInfo_.price = buyList.price
+    self.showInfo_.multiplier = self.showInfo_.num * multiplier
 
-    self.coinsNum_:setString( bole:formatCoins(self.showInfo_.num,15))
+    self.coinsNum_:setString(bole:formatCoins(self.showInfo_.num, 15))
     self.price_:setString("$ " .. self.showInfo_.price)
-    local multiplier = bole:getConfigCenter():getConfig("club_sale", id , "gift_multiplier")
-    self.multiplier_:setString("Get a club offer and each member will receive free " .. bole:formatCoins(self.showInfo_.num * 0.1,15) .. " bonus chips.")
 
+    if self.cellType_ == "inChat" then
+        self.root_:getChildByName("txt_coins_re"):setString(bole:formatCoins(self.showInfo_.multiplier, 15))
+        self.price_:setString("$" .. self.showInfo_.price)
+    else
+        self.multiplier_:setString("Get a club offer and each member will")
+        self.multiplier2_:setString("receive")
+        self.num_coins_:setString(bole:formatCoins(self.showInfo_.multiplier, 15))
+    end
 end
 
 
 function ClubBuyCell:buy()
-
+    bole:getBuyManage():buy(self.showInfo_.commodity_id)
 end
 
 

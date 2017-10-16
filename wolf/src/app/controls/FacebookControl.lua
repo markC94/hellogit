@@ -44,7 +44,7 @@ function FacebookControl:setListeners()
         local name = args.name
         local jsonData = args.data
         dump(args, "FacebookControl:setListeners,name =" .. name)
-
+        bole:postEvent("facebookControlInfo",args)
         if "onLogin" == name then
             local flag = args.isLoggedIn and "success" == jsonData
             if self.loginForSendFriends then
@@ -199,6 +199,7 @@ function FacebookControl:onFacebookConnect(t, data)
     end
     if 1 == data.same_facebook_id or 1 == data.bind_fb then  --绑定成功，存储一下facebookId
         self:cacheUserId()
+        bole:postEvent("refreshFBFriendView")
     elseif 1 == data.need_re_login and data.credential then  --切换账号，用户切换了一个新的facebook账号
         self:cacheUserId(data.credential)  --存储新的账号信息（userId, facebookId）
         self:relogin()  --断开重新连接登录游戏

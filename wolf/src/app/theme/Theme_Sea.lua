@@ -2,26 +2,22 @@
 --Date
 --此文件由[BabeLua]插件自动生成
 
-local Theme_Sea = class("Theme_Sea", bole:getTable("app.theme.BaseTheme"))
+local Theme_sea = class("Theme_sea", bole:getTable("app.theme.BaseTheme"))
 
-function Theme_Sea:ctor(themeId, app)
-    print("Theme_Sea:ctor")
-    Theme_Sea.super.ctor(self, themeId, app)
+function Theme_sea:ctor(themeId, app)
+    print("Theme_sea:ctor")
+    Theme_sea.super.ctor(self, themeId, app)
+    self.closeFiveKind = true
 end
 
-function Theme_Sea:enterThemeDataFilter(data)
-    print("Theme_Sea:enterThemeDataFilter")
-    Theme_Sea.super.enterThemeDataFilter(self, data)
-end
-
-function Theme_Sea:onDataFilter(data)
-    print("Theme_Sea:onDataFilter")
-    Theme_Sea.super.onDataFilter(self, data)
+function Theme_sea:onDataFilter(data)
+    print("Theme_sea:onDataFilter")
+    Theme_sea.super.onDataFilter(self, data)
     self.bigAnimPos = data.icon_positions
     self.bigAnimId = data.superstacks_iconid
 end
 
-function Theme_Sea:onPlayBigAnim(data)
+function Theme_sea:onPlayBigAnim(data)
     if not self.bigAnimId or not self.bigAnimPos or #self.bigAnimPos < 9 then 
         self:onPlayBigAnimEnd()
         return
@@ -69,31 +65,41 @@ function Theme_Sea:onPlayBigAnim(data)
     local layoutTopY = layoutBottomY + self.matrix.cell_size[2]*3 + 2
     
     local layout = ccui.Layout:create()
-    layout:setContentSize(cc.size(layoutWidth, self.matrix.cell_size[2]*3+55))
-    layout:setPosition(layoutPos.x, layoutPos.y)
+    local layoutSize = cc.size(layoutWidth, self.matrix.cell_size[2]*3+70)
+    layout:setContentSize(layoutSize)
+    layout:setAnchorPoint(cc.p(0.5, 0.5))
+    layout:setPosition(layoutPos.x+layoutSize.width/2, layoutPos.y+layoutSize.height/2)
     layout:setClippingEnabled(true)
-    self.animNode:addChild(layout)
+    self:getAnimLayer(false):addChild(layout)
 
     local position = self:getSpinPositionByPos(centerColumn, 2, true)
     position.x = position.x - layoutPos.x
     position.y = position.y - layoutPos.y
 
     local imgName = self:getImgById(self.bigAnimId)
-    local skeletonNode = self:getSkeletonNodeById(self.bigAnimId, "fusion")
+    local skeletonNode = self:genSkeletonNodeById(self.bigAnimId, "fusion")
     skeletonNode:setPosition(position.x, position.y)
     layout:addChild(skeletonNode)
     skeletonNode:setAnimation(1, skeletonNode.fusion, true)
+
+    local floatNode = sp.SkeletonAnimation:create(self.app:getSymbolAnim(self.themeId, "bianhua"))
+    floatNode:setPosition(position.x, position.y)
+    layout:addChild(floatNode)
+    floatNode:setAnimation(1, "animation1", false)
+    floatNode:registerSpineEventHandler(function(event)
+        floatNode:setVisible(false)
+    end , sp.EventType.ANIMATION_COMPLETE)
 
     local isNeedRemove = false
     skeletonNode:registerSpineEventHandler(function(event)
         if event.animation == skeletonNode.fusion then
             if isNeedRemove then
-                local function removeAndStartNext()
+                skeletonNode:clearTracks()
+                local function callback()
                     layout:removeFromParent(true)
                     self:onPlayBigAnimEnd()
                 end
-                self:addWaitEvent("removeAndStartNext", 0.001, removeAndStartNext)
-                layout:setVisible(false)
+                layout:runAction(cc.Sequence:create(cc.FadeOut:create(0.25), cc.CallFunc:create(callback)))
             end
         end
     end , sp.EventType.ANIMATION_COMPLETE)
@@ -104,7 +110,7 @@ function Theme_Sea:onPlayBigAnim(data)
     self:addWaitEvent("playBigAnimEnd", 3, playBigAnimEnd)
 
     local frameNamePart = string.sub(imgName, 1, 6)
-    local topStr = string.format("theme/theme%s/bigAnimFrame/%s_top.png", self.themeId, frameNamePart)
+    local topStr = self.app:getRes(self.themeId, string.format("bigAnimFrame/%s_top.png", frameNamePart))
     if cc.FileUtils:getInstance():isFileExist(topStr) then
         local topSp = cc.Sprite:create(topStr)
         layout:addChild(topSp)
@@ -122,7 +128,7 @@ function Theme_Sea:onPlayBigAnim(data)
         btSp:setScaleX(scaleX)
     end
 
-    local leftStr = string.format("theme/theme%s/bigAnimFrame/%s_left.png", self.themeId, frameNamePart)
+    local leftStr = self.app:getRes(self.themeId, string.format("bigAnimFrame/%s_left.png", frameNamePart))
     if frameNamePart ~= "sea_h1" or startColumnIndex ~= 1 or (startColumnIndex == 1 and centerColumn == 2) then
         local lfSp = cc.Sprite:create(leftStr)
         layout:addChild(lfSp)
@@ -137,26 +143,30 @@ function Theme_Sea:onPlayBigAnim(data)
         rtSp:setAnchorPoint(cc.p(1, 0.5))
         rtSp:setPosition(endPosx-startPosX, position.y)
     end
+
+    bole:autoOpacityC(layout)
+    layout:setOpacity(0)
+    layout:setScale(0.85)
+    layout:runAction(cc.Spawn:create(cc.ScaleTo:create(0.2, 1), cc.FadeIn:create(0.2)))
+    bole:getAudioManage():playBigSymbol()
 end
 
-function Theme_Sea:onPlayBigAnimEnd(data)
+function Theme_sea:onPlayBigAnimEnd(data)
     local eventName = "playBigAnim"
     self.curStepName = eventName
     self:onNext()
 end
 
-function Theme_Sea:setFreeSpinPosition(x, y)
-    y = y - 23
-    Theme_Sea.super.setFreeSpinPosition(self, x, y)
-end
-
-function Theme_Sea:addListeners()
-    Theme_Sea.super.addListeners(self)
---    self:addListenerForNext("popupDialog", self.onMiniEffect)
+function Theme_sea:addListeners()
+    Theme_sea.super.addListeners(self)
     self:addListenerForNext("popupDialog", self.onPlayBigAnim)
     self:addListenerForNext("playBigAnim", self.onMiniEffect)
 end
 
-return Theme_Sea
+function Theme_sea:addOtherAsyncImage(weights)
+    table.insert(weights, self.app:getSymbolAnimImg(self.themeId, "bianhua"))
+end
+
+return Theme_sea
 
 --endregion

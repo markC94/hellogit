@@ -3,26 +3,31 @@
 -- 此文件由[BabeLua]插件自动生成
 
 local ClubMemberCell = class("ClubMemberCell", cc.Node)
-function ClubMemberCell:ctor(data,i)
-    self.node = cc.CSLoader:createNode("csb/club_cell/ClubMemberCell.csb")
+function ClubMemberCell:ctor(data,index)
+    self.node = cc.CSLoader:createNode("club/ClubMemberCell.csb")
     self:addChild(self.node)
     local root = self.node:getChildByName("img_bg")
+    self.bg_ = root
     self.txt_num = root:getChildByName("txt_num")
     self.txt_name = root:getChildByName("txt_name")
 
     if tonumber(data.club_title) == 1 then
         self.txt_name:setString("Leader")
-        self.txt_name:setTextColor({ r = 39, g = 174, b = 23})
+        self.bg_:loadTexture("loadImage/club_members_bg1.png")
+        self.txt_num:setTextColor({ r = 40, g = 51, b = 76})
     elseif tonumber(data.club_title) == 3 or tonumber(data.club_title) == 0 then
         self.txt_name:setString("Member")
-        self.txt_name:setTextColor({ r = 39, g = 174, b = 23})
+        self.bg_:loadTexture("loadImage/club_members_bg2.png")
+        self.txt_num:setTextColor({ r = 255, g = 255, b = 255})
     elseif tonumber(data.club_title) == 2 then
         self.txt_name:setString("Co_leader")
-       self.txt_name:setTextColor({ r = 52, g = 189, b = 255})
-
+        self.bg_:loadTexture("loadImage/club_members_bg3.png")
+        self.txt_num:setTextColor({ r = 40, g = 51, b = 76})
     end
-
-
+    
+    if data.user_id == bole:getUserDataByKey("user_id") then
+        self.bg_:loadTexture("loadImage/club_frame_member_light.png")
+    end
 
     local sp_cj = root:getChildByName("sp_cj")
     local sp_pig = root:getChildByName("sp_pig")
@@ -36,27 +41,54 @@ function ClubMemberCell:ctor(data,i)
     if data.league_point == nil then
         data.league_point = 0
     end
-    self.txt_ach:setString(data.donate)
-    self.txt_pig:setString(data.league_point)
+    self.txt_ach:setString((bole:formatCoins(tonumber(data.league_point),5)))
+    self.txt_pig:setString((bole:formatCoins(tonumber(data.donate),5)))
 
-
-
-    self.txt_pig = root:getChildByName("txt_pig")
     local node_head = root:getChildByName("node_head")
     local nHead = bole:getNewHeadView(data)
-    --nHead:updatePos(nHead.POS_CLUB_LEADER)
+    nHead:updatePos(nHead.POS_CLUB_MEMBER)
+    nHead:setScale(0.8)
+    self.nHead_ = nHead
     node_head:addChild(nHead)
-    root:getChildByName("txt_num"):setString(i)
+    self.txt_num:setString(index)
     
-
-
-
-
-    self:updateInfo(data)
+    self:updateInfo(data,index)
 end
 
-function ClubMemberCell:updateInfo(data)
-       
+function ClubMemberCell:updateInfo(data,index)
+     
+    if tonumber(data.club_title) == 1 then
+        self.txt_name:setString("Leader")
+        self.bg_:loadTexture("loadImage/club_members_bg1.png")
+        self.txt_num:setTextColor({ r = 40, g = 51, b = 76})
+    elseif tonumber(data.club_title) == 3 or tonumber(data.club_title) == 0 then
+        self.txt_name:setString("Member")
+        self.bg_:loadTexture("loadImage/club_members_bg2.png")
+        self.txt_num:setTextColor({ r = 255, g = 255, b = 255})
+    elseif tonumber(data.club_title) == 2 then
+        self.txt_name:setString("Co_leader")
+        self.bg_:loadTexture("loadImage/club_members_bg3.png")
+        self.txt_num:setTextColor({ r = 40, g = 51, b = 76})
+    end
+    if data.user_id == bole:getUserDataByKey("user_id") then
+        self.bg_:loadTexture("loadImage/club_frame_member_light.png")
+    end
+
+    if data.donate == nil then
+        data.donate = 0
+    end
+
+    if data.league_point == nil then
+        data.league_point = 0
+    end
+    self.txt_ach:setString((bole:formatCoins(tonumber(data.league_point),5)))
+    self.txt_pig:setString((bole:formatCoins(tonumber(data.donate),5)))
+
+    if self.nHead_ ~= nil then
+        self.nHead_:updateInfo(data)
+    end
+   
+    self.txt_num:setString(index)
 end
 
 function ClubMemberCell:updateNum(num)
@@ -68,10 +100,10 @@ function ClubMemberCell:updateName(name,num)
 end
 
 function ClubMemberCell:updateAch(ach)
-    self.txt_ach:setString(ach)
+    self.txt_ach:setString((bole:formatCoins(ach,5)))
 end
 function ClubMemberCell:updatePig(pig)
-    self.txt_pig:setString(pig)
+    self.txt_pig:setString((bole:formatCoins(ach,5)))
 end
 function ClubMemberCell:touchEvent(sender, eventType)
     local name = sender:getName()

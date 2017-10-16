@@ -6,20 +6,19 @@ local JONES_BEGIN = 1
 local JONES_OPEN = 2
 local JONES_OVER = 3
 local count = { 10, 12, 0, 15, 10, 15, 12, 25, 0, 10 }
-local flyPos={{cc.p(318,246),cc.p(640,246),cc.p(950,246),cc.p(790,316),cc.p(480,316)},{cc.p(240,368),cc.p(1023,350),cc.p(472,347),cc.p(757,345),cc.p(0,0)}}
 function JonesGame:ctor(data)
     self.index = -1
     self.delayTime = 0
     self.isDelayTpe = 0
     schedule(self, self.updateWaitTime, 0.1)
     self:init()
-    self.continueData=data
-    self.isContinue=0
-    self.isAnimate=false
+    self.continueData = data
+    self.isContinue = 0
+    self.isAnimate = false
     if data then
-        dump(data,"JonesGame:ctor")
-        if #data ==0 then
-            self.continueData=nil
+        dump(data, "JonesGame:ctor")
+        if #data == 0 then
+            self.continueData = nil
             self:showGame()
         else
             print("JonesGame:ctor----------------------------------")
@@ -69,6 +68,7 @@ function JonesGame:isSpin(data)
     else
         self.index = data.chose
     end
+    bole:getAudioManage():playEff("w4")
     self.Button_1:setBright(false)
     self.Button_1:setTouchEnabled(false)
     self.isDelayTpe = 0
@@ -89,19 +89,23 @@ function JonesGame:updateWaitTime()
     end
 end
 function JonesGame:showSpin()
-    
+
     performWithDelay(self, function()
-            bole:getAudioManage():playEff("jones_wheel1")
+        bole:getAudioManage():playEff("w2")
     end , 0.5)
+    local windowSize = cc.Director:getInstance():getWinSize()
+    self.mask= bole:getUIManage():getNewMaskUI("PayTable")
+    self.mask:setPosition(cc.p(windowSize.width / 2, windowSize.height / 2))
+    self:addChild(self.mask)
+
     self.isDelayTpe = 1
     self.delayTime = 0
-    self.spinNode = cc.CSLoader:createNode("theme40009/turntable/MainScene.csb")
-    self.spinNode:setScale(0.8)
-    self.spinNode:setPosition(1337 *(1 - 0.8) / 2, 750 *(1 - 0.8) / 2)
+    local path= bole:getSpinApp():getMiniRes(nil,"mini_spin/MiniSpin.csb")
+    self.spinNode = cc.CSLoader:createNodeWithVisibleSize(path)
 
-    self.spinAction = cc.CSLoader:createTimeline("theme40009/turntable/MainScene.csb")
+    self.spinAction = cc.CSLoader:createTimeline(path)
     self.spinNode:runAction(self.spinAction)
-    self.spinAction:gotoFrameAndPlay(0, 100, false)
+    self.spinAction:play("start",false)
     self:addChild(self.spinNode)
 
     self.node_start = self.spinNode:getChildByName("node_start")
@@ -118,15 +122,15 @@ function JonesGame:showSpin()
     local node_eff_2 = self.node_start:getChildByName("node_eff_2")
     local node_eff_3 = self.node_start:getChildByName("node_eff_3")
 
-    self.skeletonNode1 = sp.SkeletonAnimation:create("common/saoguang.json", "common/saoguang.atlas")
+    self.skeletonNode1 = sp.SkeletonAnimation:create("util_act/saoguang.json", "util_act/saoguang.atlas")
     node_eff_1:addChild(self.skeletonNode1, 1)
-    self.skeletonNode1:setBlendFunc({src = 770, dst = 1})
-    self.skeletonNode2 = sp.SkeletonAnimation:create("common/xuanzhong.json", "common/xuanzhong.atlas")
+    self.skeletonNode1:setBlendFunc( { src = 770, dst = 1 })
+    self.skeletonNode2 = sp.SkeletonAnimation:create("util_act/xuanzhong.json", "util_act/xuanzhong.atlas")
     node_eff_2:addChild(self.skeletonNode2, 1)
-    self.skeletonNode2:setBlendFunc({src = 770, dst = 1})
-    self.skeletonNode3 = sp.SkeletonAnimation:create("common/yuanpan.json", "common/yuanpan.atlas")
+    self.skeletonNode2:setBlendFunc( { src = 770, dst = 1 })
+    self.skeletonNode3 = sp.SkeletonAnimation:create("util_act/yuanpan.json", "util_act/yuanpan.atlas")
     node_eff_3:addChild(self.skeletonNode3, 1)
-    self.skeletonNode3:setBlendFunc({src = 770, dst = 1})
+    self.skeletonNode3:setBlendFunc( { src = 770, dst = 1 })
     self.skeletonNode2:setVisible(false)
     self.skeletonNode1:setVisible(false)
     self.skeletonNode3:setVisible(false)
@@ -136,15 +140,21 @@ function JonesGame:showSpin()
     self.skeletonNode1:setScale(1.6)
     self.skeletonNode2:setScale(1.8)
     self.skeletonNode3:setScale(1.6)
+
+    performWithDelay(self, function()
+        self.skeletonNode1:setVisible(true)
+        self.skeletonNode1:setAnimation(0, "animation", false)
+    end , 1.5)
+    
 end
 
 function JonesGame:spin()
     bole:getMiniGameControl():minigame_start()
-    -- self:isSpin({chose=1})
+--     self:isSpin({chose=1})
 end
 
 function JonesGame:rotaAction()
-    bole:getAudioManage():playEff("jones_wheel2")
+    bole:getAudioManage():playMusic("w3",true)
     self.rota_1:setRotation(0)
     self.rota_2:setRotation(0)
     self.rota_3:setRotation(0)
@@ -169,14 +179,20 @@ function JonesGame:gotoView()
         self.skeletonNode2:setOpacity(0)
         self.skeletonNode2:runAction(cc.FadeIn:create(0.5))
         self.skeletonNode2:setAnimation(0, "animation", true)
+        bole:getAudioManage():playEff("w5")
     end , 0.8)
+
+    bole:getAudioManage():stopAudio("w3")
+
     self.skeletonNode3:setVisible(true)
     self.skeletonNode3:setAnimation(0, "animation", false)
-    bole:getAudioManage():playEff("jones_wheel3")
+    
     print("self.index:" .. self.index)
+    self.spinAction:play("select",false)
     performWithDelay(self, function()
-        self.spinAction:gotoFrameAndPlay(100, 130, false)
-    end , 1.7)
+        self.spinAction:play("end",false)
+        bole:getAudioManage():playEff("w6")
+    end , 1.7+0.5)
 
     performWithDelay(self, function()
         if self.spinNode then
@@ -189,47 +205,29 @@ function JonesGame:gotoView()
             self:showDialog()
         end
 
-    end , 2)
+    end , 2.3+0.5)
 
 end
-function JonesGame:getSimpleLayout(name, isColor)
-    local touch_layer = ccui.Layout:create()
-    touch_layer:ignoreContentAdaptWithSize(false)
-    touch_layer:setClippingEnabled(false)
 
-    if isColor then
-        touch_layer:setBackGroundColorType(1)
-        touch_layer:setBackGroundColor( { r = 0, g = 0, b = 0 })
+function JonesGame:showDialog()
+    print("showDialog:" .. self.index)
+    if self.index == 1 or self.index == 6 then
+        bole:getMiniGameControl():freeSpinJonesStart(count[self.index],true)
+    else
+        bole:getMiniGameControl():freeSpinJonesStart(count[self.index])
     end
-
-    touch_layer:setBackGroundColorOpacity(255)
-    touch_layer:setTouchEnabled(true);
-    touch_layer:setLayoutComponentEnabled(true)
-    touch_layer:setName(name)
-    touch_layer:setCascadeColorEnabled(true)
-    touch_layer:setCascadeOpacityEnabled(true)
-    touch_layer:setAnchorPoint(0.5000, 0.5000)
-    touch_layer:setPosition(1000.0000, 562.0000)
-    local layout = ccui.LayoutComponent:bindLayoutComponent(touch_layer)
-    layout:setPositionPercentX(0.5000)
-    layout:setPositionPercentY(0.5000)
-    --    layout:setPercentWidthEnabled(true)
-    --    layout:setPercentHeightEnabled(true)
-    layout:setPercentWidth(1.0000)
-    layout:setPercentHeight(1.0000)
-    layout:setSize( { width = 2001.0000, height = 1125.0000 })
-    return touch_layer
+    self:removeFromParent()
 end
+
 function JonesGame:showGame()
-    bole:getAudioManage():playMusic("Jones_minigame1",true)
+    bole:getAudioManage():playMusic("s2", true)
     self.level = 1
     self.clickIndex = 1
-    local mask = self:getSimpleLayout("test", true)
-    self:addChild(mask)
     self.isDelayTpe = 0
     self.delayTime = 0
-    self.gameNode = cc.CSLoader:createNode("theme40009/bonus_game/MainScene.csb")
-    self.gameNodeAct = cc.CSLoader:createTimeline("theme40009/bonus_game/MainScene.csb")
+    local path= bole:getSpinApp():getMiniRes(nil,"mini_game/MiniGame.csb")
+    self.gameNode = cc.CSLoader:createNode(path)
+    self.gameNodeAct = cc.CSLoader:createTimeline(path)
     self.gameNode:runAction(self.gameNodeAct)
     self.gameNodeAct:gotoFrameAndPlay(0, 105, false)
     self:addChild(self.gameNode)
@@ -246,34 +244,34 @@ function JonesGame:showGame()
     local director = cc.Director:getInstance()
     local view = director:getOpenGLView()
     local framesize = view:getFrameSize()
-    local dessize=view:getDesignResolutionSize()
-    local factor=director:getContentScaleFactor()
-    
-    local factor=dessize.height/720
-    local factor2=dessize.width/1200
-    if factor<factor2 then
+    local dessize = view:getDesignResolutionSize()
+    local factor = director:getContentScaleFactor()
+
+    local factor = dessize.height / 720
+    local factor2 = dessize.width / 1200
+    if factor < factor2 then
         self.gameNode:setScale(factor2)
-        self.gameNode:setPosition((dessize.width-1200*factor2)*0.5-27, (dessize.height-720*factor)*0.5)
+        self.gameNode:setPosition((dessize.width - 1200 * factor2) * 0.5 - 27,(dessize.height - 720 * factor) * 0.5)
     else
         self.gameNode:setScale(factor)
-        self.gameNode:setPosition((dessize.width-1200*factor)*0.5-27, (dessize.height-720*factor)*0.5)
+        self.gameNode:setPosition((dessize.width - 1200 * factor) * 0.5 - 27,(dessize.height - 720 * factor) * 0.5)
     end
-    
-    
+
+
     self.node_1:setVisible(true)
     self.node_lock1 = self.node_1:getChildByName("node_lock")
     self.node_lock2 = self.node_2:getChildByName("node_lock")
     self.node_door1 = self.node_1:getChildByName("node_door")
     self.node_door2 = self.node_2:getChildByName("node_door")
 
-    self.lock_1 = sp.SkeletonAnimation:create("common/yaoshi.json", "common/yaoshi.atlas")
+    self.lock_1 = sp.SkeletonAnimation:create("util_act/yaoshi.json", "util_act/yaoshi.atlas")
     self.node_lock1:addChild(self.lock_1, 1)
-    self.door_1 = sp.SkeletonAnimation:create("common/men.json", "common/men.atlas")
+    self.door_1 = sp.SkeletonAnimation:create("util_act/men.json", "util_act/men.atlas")
     self.node_door1:addChild(self.door_1, 1)
 
-    self.lock_2 = sp.SkeletonAnimation:create("common/yaoshi.json", "common/yaoshi.atlas")
+    self.lock_2 = sp.SkeletonAnimation:create("util_act/yaoshi.json", "util_act/yaoshi.atlas")
     self.node_lock2:addChild(self.lock_2, 1)
-    self.door_2 = sp.SkeletonAnimation:create("common/men.json", "common/men.atlas")
+    self.door_2 = sp.SkeletonAnimation:create("util_act/men.json", "util_act/men.atlas")
     self.node_door2:addChild(self.door_2, 1)
 
     self.door_2:setVisible(false)
@@ -288,7 +286,7 @@ function JonesGame:showGame()
     self.cells = { { }, { }, { } }
 
 
-    self.mulit = { { }, { }, { } }
+    self.mulit = { { }, { }, { },{ }}
     self.mulit[1][1] = self.node_1:getChildByName("x2")
     self.mulit[1][2] = self.node_1:getChildByName("x3")
     self.mulit[1][3] = self.node_1:getChildByName("x6")
@@ -298,6 +296,15 @@ function JonesGame:showGame()
     self.mulit[3][1] = self.node_3:getChildByName("x2")
     self.mulit[3][2] = self.node_3:getChildByName("x3")
     self.mulit[3][3] = self.node_3:getChildByName("x6")
+
+    self.mulit[1][4] = self.node_1:getChildByName("x1")
+    self.mulit[2][4] = self.node_2:getChildByName("x1")
+    self.mulit[3][4] = self.node_3:getChildByName("x1")
+    self:restMulit()
+
+    self.mulit[1][4]:setVisible(true)
+    self.mulit[2][4]:setVisible(true)
+    self.mulit[3][4]:setVisible(true)
     local ren = self.node_1:getChildByName("ren")
     for i = 1, 5 do
         local ren_cell = ren:getChildByName("ren_" .. i)
@@ -308,6 +315,7 @@ function JonesGame:showGame()
         self.cells[1][i] = ren_cell
         label:setString(999999)
         self:changeCell(i, 1, JONES_BEGIN)
+        
     end
     local ren2 = self.node_2:getChildByName("ren")
     for i = 1, 4 do
@@ -331,28 +339,41 @@ function JonesGame:showGame()
         label:setString(999999)
         self:changeCell(i, 3, JONES_BEGIN)
     end
-    if self.isContinue==0 then
-        self.isAnimate=true
+    if self.isContinue == 0 then
+        self.isAnimate = true
         bole:getMiniGameControl():minigame_start()
     else
-         performWithDelay(self, function()
+        performWithDelay(self, function()
             self:nextContine()
         end , 2)
     end
 end
-
+function JonesGame:restMulit()
+    self.mulit[1][1]:setVisible(false)
+    self.mulit[1][2]:setVisible(false)
+    self.mulit[1][3]:setVisible(false)
+    self.mulit[2][1]:setVisible(false)
+    self.mulit[2][2]:setVisible(false)
+    self.mulit[2][3]:setVisible(false)
+    self.mulit[3][1]:setVisible(false)
+    self.mulit[3][2]:setVisible(false)
+    self.mulit[3][3]:setVisible(false)
+    self.mulit[1][4]:setVisible(false)
+    self.mulit[2][4]:setVisible(false)
+    self.mulit[3][4]:setVisible(false)
+end
 function JonesGame:nextContine()
-    if self.isContinue ==0 then
-       return
+    if self.isContinue == 0 then
+        return
     end
 
-    self.isAnimate=true
-    local data=self.continueData[self.isContinue]
-    self.clickIndex=data.position
+    self.isAnimate = true
+    local data = self.continueData[self.isContinue]
+    self.clickIndex = data.position
     self:conitnue(data)
-    self.isContinue=self.isContinue+1
-    if self.isContinue>#self.continueData then
-        self.isContinue=0
+    self.isContinue = self.isContinue + 1
+    if self.isContinue > #self.continueData then
+        self.isContinue = 0
     end
 end
 
@@ -360,52 +381,14 @@ function JonesGame:conitnue(data)
     if not data then return end
     dump(data, "continue---")
     if not data.hp then
-        self.isAnimate=false
-        print("JonesGame:conitnue-----------------error sample")
+        self.isAnimate = false
         return
     end
-    if data.featrue_multiplier == 2 then
-        self.mulit[self.level][1]:setVisible(true)
-        self.mulit[self.level][2]:setVisible(false)
-        self.mulit[self.level][3]:setVisible(false)
-        if self.level~=3 then
-            self.mulit[self.level+1][1]:setVisible(true)
-            self.mulit[self.level+1][2]:setVisible(false)
-            self.mulit[self.level+1][3]:setVisible(false)
-        end
-    elseif data.featrue_multiplier == 3 then
-        self.mulit[self.level][1]:setVisible(false)
-        self.mulit[self.level][2]:setVisible(true)
-        self.mulit[self.level][3]:setVisible(false)
-        if self.level~=3 then
-            self.mulit[self.level+1][1]:setVisible(false)
-            self.mulit[self.level+1][2]:setVisible(true)
-            self.mulit[self.level+1][3]:setVisible(false)
-        end
-    elseif data.featrue_multiplier == 6 then
-        self.mulit[self.level][1]:setVisible(false)
-        self.mulit[self.level][2]:setVisible(false)
-        self.mulit[self.level][3]:setVisible(true)
-        if self.level~=3 then
-            self.mulit[self.level+1][1]:setVisible(false)
-            self.mulit[self.level+1][2]:setVisible(false)
-            self.mulit[self.level+1][3]:setVisible(true)
-        end
-    elseif data.featrue_multiplier == 0 then
-        self.mulit[1][1]:setVisible(false)
-        self.mulit[1][2]:setVisible(false)
-        self.mulit[1][3]:setVisible(false)
-        self.mulit[2][1]:setVisible(false)
-        self.mulit[2][2]:setVisible(false)
-        self.mulit[2][3]:setVisible(false)
-        self.mulit[3][1]:setVisible(false)
-        self.mulit[3][2]:setVisible(false)
-        self.mulit[3][3]:setVisible(false)
-    end
+   
     if data.status == "START" then
-        self.isAnimate=false
+        self.isAnimate = false
     elseif data.status == "OPEN" then
-        self:changeCell(self.clickIndex, data.minigame_content, JONES_OPEN)
+        self:changeCell(self.clickIndex, data.minigame_content, JONES_OPEN,data.featrue_multiplier)
         performWithDelay(self, function()
             local index = 1
             dump(data.minigame_other_content, "data.minigame_other_content")
@@ -420,11 +403,8 @@ function JonesGame:conitnue(data)
                 end
             end
         end , 0.5)
-        performWithDelay(self, function()
-            self:nextGame()
-        end , 1.6)
     elseif data.status == "CLOSED" then
-        self:changeCell(self.clickIndex, data.minigame_win, JONES_OPEN)
+        self:changeCell(self.clickIndex, data.minigame_content, JONES_OPEN)
         performWithDelay(self, function()
             local index = 1
             for i = 1, #self.cells[self.level] do
@@ -442,17 +422,15 @@ function JonesGame:conitnue(data)
     end
 end
 
-function JonesGame:changeCell(index, data, status)
+function JonesGame:changeCell(index, data, status,featrue_multiplier)
     local level = self.level
     if status == JONES_BEGIN then
         level = data
     end
     if data then
-        print("changeCell data:"..data)
+        print("changeCell data:" .. data)
     end
-    print("changeCell index:"..index)
-    
-    print("changeCell status:"..status)
+
     local cell = self.cells[level][index]
     local label = cell:getChildByName("label")
     local ren_hui = cell:getChildByName("ren_hui")
@@ -460,18 +438,16 @@ function JonesGame:changeCell(index, data, status)
 
     local key_hui = cell:getChildByName("key_hui")
     local key = cell:getChildByName("key")
-    if level ~= 3 then
-        key_hui:setScale(0.6)
-        key:setScale(0.6)
-    end
+    
     local x2_hui = cell:getChildByName("x2_hui")
     local x2 = cell:getChildByName("x2")
     local x3_hui = cell:getChildByName("x3_hui")
     local x3 = cell:getChildByName("x3")
     local x6_hui = cell:getChildByName("x6_hui")
     local x6 = cell:getChildByName("x6")
-    if status == JONES_BEGIN then
-        if level ~= 3 then
+    if level ~= 3 then
+            key:setScale(0.8)
+            key_hui:setScale(0.8)
             key_hui:setVisible(false)
             key:setVisible(false)
             x2_hui:setVisible(false)
@@ -480,9 +456,11 @@ function JonesGame:changeCell(index, data, status)
             x3:setVisible(false)
             x6_hui:setVisible(false)
             x6:setVisible(false)
-        end
+    end
+    if status == JONES_BEGIN then
         label:setVisible(false)
         ren:setVisible(true)
+        bole:toLight(ren)
         ren_hui:setVisible(false)
         return
     end
@@ -491,53 +469,45 @@ function JonesGame:changeCell(index, data, status)
         if level ~= 3 then
             key_hui:setVisible(false)
             key:setVisible(true)
-            x2_hui:setVisible(false)
-            x2:setVisible(false)
-            x3_hui:setVisible(false)
-            x3:setVisible(false)
-            x6_hui:setVisible(false)
-            x6:setVisible(false)
-            local isFlay=true
-            if data == "[-2]" then
-                bole:getAudioManage():playEff("jones_box2")
+            local mulit
+            if data == -2 then
+                bole:getAudioManage():playEff("w11")
                 x2:setVisible(true)
-            elseif data == "[-3]" then
-                bole:getAudioManage():playEff("jones_box2")
+                mulit=x2
+            elseif data == -3 then
+                bole:getAudioManage():playEff("w11")
                 x3:setVisible(true)
-            elseif data == "[-6]" then
-                bole:getAudioManage():playEff("jones_box2")
+                mulit=x3
+            elseif data == -6 then
+                bole:getAudioManage():playEff("w11")
                 x6:setVisible(true)
+                mulit=x6
             else
-                bole:getAudioManage():playEff("jones_box3")
+                bole:getAudioManage():playEff("w12")
                 label:setVisible(true)
-                label:setString(data)
-                isFlay=false
+                label:setString("$".. bole:formatCoins(data,8))
                 key:setVisible(false)
             end
-            if isFlay then
-                performWithDelay(cell,function()
-                    self:flyKey(key)
-                end,0.5)
+
+            if mulit then
+                performWithDelay(cell, function()
+                    self:flyKey(key,mulit,featrue_multiplier)
+                end , 0.5)
             end
         else
             label:setVisible(true)
-            label:setString(data)
+            label:setString("$".. bole:formatCoins(data,8))
         end
         ren:setVisible(true)
         ren:setOpacity(50)
         ren_hui:setVisible(false)
+        bole:clearLight(ren)
         return
     end
     if status == JONES_OVER then
         if level ~= 3 then
             key_hui:setVisible(true)
             key:setVisible(false)
-            x2_hui:setVisible(false)
-            x2:setVisible(false)
-            x3_hui:setVisible(false)
-            x3:setVisible(false)
-            x6_hui:setVisible(false)
-            x6:setVisible(false)
             if data == -2 then
                 x2_hui:setVisible(true)
             elseif data == -3 then
@@ -547,53 +517,95 @@ function JonesGame:changeCell(index, data, status)
             else
                 label:setVisible(true)
                 label:setColor(cc.c3b(100, 100, 100))
-                label:setString(data)
+                label:setString("$".. bole:formatCoins(data,8))
                 key_hui:setVisible(false)
             end
         else
             label:setVisible(true)
             label:setColor(cc.c3b(100, 100, 100))
-            label:setString(data)
+            label:setString("$".. bole:formatCoins(data,8))
         end
+        bole:clearLight(ren)
         ren:setVisible(false)
         ren_hui:setVisible(true)
         return
     end
 end
-function JonesGame:flyKey(key)
-    if self.level==3 then
+function JonesGame:changeMulit(featrue_multiplier)
+    self:restMulit()
+    if featrue_multiplier == 2 then
+        self:restMulit()
+        self.mulit[self.level][1]:setVisible(true)
+        if self.level ~= 3 then
+            self.mulit[self.level + 1][1]:setVisible(true)
+        end
+    elseif featrue_multiplier == 3 then
+        self:restMulit()
+        self.mulit[self.level][2]:setVisible(true)
+        if self.level ~= 3 then
+            self.mulit[self.level + 1][2]:setVisible(true)
+        end
+    elseif featrue_multiplier == 6 then
+        self:restMulit()
+        self.mulit[self.level][3]:setVisible(true)
+        if self.level ~= 3 then
+            self.mulit[self.level + 1][3]:setVisible(true)
+        end
+    else
+        self.mulit[1][4]:setVisible(true)
+        self.mulit[2][4]:setVisible(true)
+        self.mulit[3][4]:setVisible(true)
+    end
+end
+
+function JonesGame:flyKey(key, mulit, data)
+    if self.level == 3 then
         return
     end
-    local bezier = {
-        flyPos[self.level][self.clickIndex],
-        cc.p(200,267),
-        cc.p(640,420)--652 435 645 497
-    }
-    local bezier2 = {
-        flyPos[self.level][self.clickIndex],
-        cc.p(640,0),
-        cc.p(640-7,420+52)
-    }
-    key:setVisible(false)
-    
-    local newKey=cc.Sprite:create("theme40009/bonus_game/yaoshi.png")
-    newKey:setPosition(flyPos[self.level][self.clickIndex])
-    newKey:setScale(0.6)
-    
-    if self.level==1 then
-        self.node_1:addChild(newKey,1)
-        local bezierTo = cc.BezierTo:create(1, bezier)
-        newKey:runAction(bezierTo)
+    local poslock
+    local posMulitEnd
+    if self.level == 1 then
+        poslock =self.lock_1:getParent():convertToWorldSpace(cc.p(self.lock_1:getPosition()))
+        posMulitEnd =self.mulit[1][4]:getParent():convertToWorldSpace(cc.p(self.mulit[1][4]:getPosition()))
     else
-        self.node_2:addChild(newKey,1)
-        local bezierTo = cc.BezierTo:create(1, bezier2)
-        newKey:runAction(bezierTo)
+        poslock =self.lock_2:getParent():convertToWorldSpace(cc.p(self.lock_2:getPosition()))
+        posMulitEnd =self.mulit[1][4]:getParent():convertToWorldSpace(cc.p(self.mulit[1][4]:getPosition()))
     end
-    
-    performWithDelay(newKey,function()
-          newKey:setVisible(false)
-          bole:getAudioManage():playEff("jones_box4")
-    end,1.1)
+    local pos = key:getParent():convertToNodeSpace(poslock)
+    local exIn = cc.EaseExponentialIn:create(cc.MoveTo:create(1.0, pos))
+    key:runAction(exIn)
+
+    local posMulit = mulit:getParent():convertToWorldSpace(cc.p(mulit:getPosition()))
+    local newMuli = display.newSprite(mulit:getTexture())
+    display.getRunningScene():addChild(newMuli, bole.ZORDER_UI)
+    newMuli:setPosition(posMulit)
+
+    local pos2 = newMuli:getParent():convertToNodeSpace(posMulitEnd)
+    local exIn2 = cc.EaseExponentialIn:create(cc.MoveTo:create(1.0, cc.p(pos2)))
+    newMuli:runAction(exIn2)
+    newMuli:setScale(1.3)
+    mulit:setVisible(false)
+    bole:getAudioManage():playEff("w13")
+    performWithDelay(key, function()
+        self:changeMulit(data)
+        key:setVisible(false)
+        newMuli:removeFromParent()
+        bole:getAudioManage():playEff("w13")
+        if self.level == 1 then
+            self.lock_1:setVisible(true)
+            self.lock_1:setAnimation(0, "animation", false)
+            performWithDelay(self, function()
+                bole:getAudioManage():playEff("w14")
+            end , 1.5)
+        else
+            self.lock_2:setVisible(true)
+            self.lock_2:setAnimation(0, "animation", false)
+            performWithDelay(self, function()
+                bole:getAudioManage():playEff("w14")
+            end , 1.5)
+        end
+        self:nextGame()
+    end , 1.1)
 end
 
 function JonesGame:clickCell(index)
@@ -601,26 +613,29 @@ function JonesGame:clickCell(index)
         print("self.isAnimate...-----------------------true")
         return
     end
-    if self.isContinue~=0 then
-        print("self.isContinue...-----------------------:"..self.isContinue)
+    if self.isContinue ~= 0 then
+        print("self.isContinue...-----------------------:" .. self.isContinue)
         return
     end
-    bole:getAudioManage():playEff("jones_box1")
-    self.isAnimate=true
+    bole:getAudioManage():playEff("w10")
+    self.isAnimate = true
     self.clickIndex = index
-    print("JonesGame:clickCell:"..index)
-    bole:getMiniGameControl():miniGame_step(index)
+    print("JonesGame:clickCell:" .. index)
+    local s1=cc.ScaleTo:create(0.2,1.1)
+    local s2=cc.ScaleTo:create(0.1,1.0)
+    local func=cc.CallFunc:create(function()
+        bole:getMiniGameControl():miniGame_step(index)
+    end)
+    local cell=self.cells[self.level][index]
+    local ren = cell:getChildByName("ren")
+    ren:runAction(cc.Sequence:create(s1,s2,func))
+    
 end
 function JonesGame:nextGame()
-    
+
     if self.level == 1 then
-        self.lock_1:setVisible(true)
-        self.lock_1:setAnimation(0, "animation", false)
         performWithDelay(self, function()
-            bole:getAudioManage():playEff("jones_box5")
-        end , 1.5)
-        performWithDelay(self, function()
-            bole:getAudioManage():playEff("jones_box6")
+            bole:getAudioManage():playEff("w15")
             self.door_1:setVisible(true)
             self.door_1:runAction(cc.FadeOut:create(1.5))
             self.door_1:setAnimation(0, "animation", false)
@@ -631,26 +646,20 @@ function JonesGame:nextGame()
             self.node_2:setVisible(true)
             self.level = self.level + 1
             self.gameNodeAct:gotoFrameAndPlay(20, 105, false)
-            bole:getAudioManage():stopAudio("Jones_minigame1")
-            bole:getAudioManage():playMusic("Jones_minigame2",true)
+            bole:getAudioManage():stopAudio("s2")
+            bole:getAudioManage():playMusic("s3", true)
         end , 4.4)
         performWithDelay(self, function()
-            if self.isContinue~=0 then
+            if self.isContinue ~= 0 then
                 self:nextContine()
             else
-                self.isAnimate=false
+                self.isAnimate = false
             end
         end , 5.4)
-        
+
     elseif self.level == 2 then
-        
-        self.lock_2:setVisible(true)
-        self.lock_2:setAnimation(0, "animation", false)
         performWithDelay(self, function()
-            bole:getAudioManage():playEff("jones_box5")
-        end , 1.5)
-        performWithDelay(self, function()
-            bole:getAudioManage():playEff("jones_box6")
+            bole:getAudioManage():playEff("w15")
             self.door_2:setVisible(true)
             self.door_2:setAnimation(0, "animation", false)
             self.gameNodeAct:gotoFrameAndPlay(105, 185, false)
@@ -660,17 +669,17 @@ function JonesGame:nextGame()
             self.node_3:setVisible(true)
             self.level = self.level + 1
             self.gameNodeAct:gotoFrameAndPlay(20, 105, false)
-            bole:getAudioManage():stopAudio("Jones_minigame2")
-            bole:getAudioManage():playMusic("Jones_minigame1",true)
+            bole:getAudioManage():stopAudio("s3")
+            bole:getAudioManage():playMusic("s4", true)
         end , 4.4)
         performWithDelay(self, function()
-            print("------------------------------------1:"..self.isContinue)
-            if self.isContinue~=0 then
+            print("------------------------------------1:" .. self.isContinue)
+            if self.isContinue ~= 0 then
                 print("------------------------------------2")
                 self:nextContine()
             else
                 print("------------------------------------3")
-                self.isAnimate=false
+                self.isAnimate = false
             end
         end , 5.4)
     elseif self.level == 3 then
@@ -679,59 +688,54 @@ function JonesGame:nextGame()
     end
 end
 function JonesGame:showOver(data)
-    self.fsdlg = cc.CSLoader:createNode("theme40009/fsDlg/fsdlg.csb")
-    self.fsdlgAct = cc.CSLoader:createTimeline("theme40009/fsDlg/fsdlg.csb")
-    self.fsdlgAct:gotoFrameAndPlay(0, 130, false)
-    self.fsdlg:runAction(self.fsdlgAct)
-    self.nodefd_start = self.fsdlg:getChildByName("node_start")
-    self.nodefd_start1 = self.fsdlg:getChildByName("node_start1")
-    self.nodefd_collect = self.fsdlg:getChildByName("node_collect")
-    self.nodefd_collect_2 = self.fsdlg:getChildByName("node_collect_2")
-    self.nodefd_morespin = self.fsdlg:getChildByName("node_morespin")
-    self.nodefd_start:setVisible(false)
-    self.nodefd_start1:setVisible(false)
-    self.nodefd_collect:setVisible(false)
-    self.nodefd_collect_2:setVisible(false)
-    self.nodefd_morespin:setVisible(false)
-    self:addChild(self.fsdlg)
-    self:initOver(self.nodefd_collect_2,data)
+    bole:getAppManage():addCoins(data.minigame_win)
+    local path= bole:getSpinApp():getMiniRes(nil,"free_spin/FSLayer.csb")
+    self.csbNode = cc.CSLoader:createNodeWithVisibleSize(path)
+    self.csbAct = cc.CSLoader:createTimeline(path)
+    self.csbNode:runAction(self.csbAct)
+    local root = self.csbNode:getChildByName("root")
+    self.node_start = root:getChildByName("node_start")
+    self.node_collect = root:getChildByName("node_collect")
+    self.node_start_weild = root:getChildByName("node_start_weild")
+    self.node_more = root:getChildByName("node_more")
+    self.node_start_weild:setVisible(false)
+    self.node_more:setVisible(false)
+    self.node_start:setVisible(false)
+    self.node_collect:setVisible(false)
+    self:addChild(self.csbNode)
+    self:initOver(data)
 end
-function JonesGame:initOver(node,data)
-    node:setVisible(true)
-    local beijing_xiaoy=node:getChildByName("beijing_xiaoy")
-    local bs_win=beijing_xiaoy:getChildByName("bs_win")
-    local mul=beijing_xiaoy:getChildByName("mul")
-    local total=beijing_xiaoy:getChildByName("total")
-    bs_win:setString(math.floor(data.minigame_win/data.featrue_multiplier))
-    mul:setString(data.featrue_multiplier)
-    total:setString(bole:formatCoins(data.minigame_win,9))
-    local btn=beijing_xiaoy:getChildByName("btn")
-    btn:addTouchEventListener(handler(self, self.touchEvent))
-    local Node_1=beijing_xiaoy:getChildByName("Node_1")
-    self.skeletonOver = sp.SkeletonAnimation:create("common/congratylaions.json", "common/congratylaions.atlas")
+
+function JonesGame:initOver(data)
+    self.node_collect:setVisible(true)
+    self.csbAct:play("start", false)
+    local bg = self.node_collect:getChildByName("bg")
+    local btn_collect = bg:getChildByName("btn_collect")
+    btn_collect:addTouchEventListener(handler(self, self.touchEvent))
+    local label_coins = bg:getChildByName("label_coins")
+    label_coins:setString(bole:formatCoins(data.minigame_win,9))
+    bole:getAudioManage():playFeatureForKey(self.feature_id, "feature_end")
+    bole:flash(btn_collect,"free_spin/ui/anniu2.png")
+    self:addTitleEff(bg)
+end
+
+function JonesGame:addTitleEff(bg)
+    local Node_1 = bg:getChildByName("Node_1")
+    self.skeletonOver = sp.SkeletonAnimation:create("util_act/congratylaions.json", "util_act/congratylaions.atlas")
     Node_1:addChild(self.skeletonOver, 1)
-    self.skeletonOver:setBlendFunc({src = 770, dst = 1})
-    
-    performWithDelay(self,function ()
+    self.skeletonOver:setBlendFunc( { src = 770, dst = 1 })
+
+    performWithDelay(self, function()
         self.skeletonOver:setAnimation(0, "animation", false)
-    end,1)
+    end , 1)
 end
 function JonesGame:gameOver()
-
-    bole:postEvent("next_data", { })
+    bole:postEvent("next_data", { isDeal = true})
     bole:postEvent("next_miniGame")
-    bole:getAudioManage():stopAudio("Jones_minigame1")
-    bole:getAudioManage():stopAudio("Jones_minigame2")
-    self:removeFromParent()
-end
-function JonesGame:showDialog()
-    print("showDialog:" .. self.index == 1)
-    if self.index == 1 or self.index == 6 then
-        bole:postEvent("mng_newDialog", { msg = "start", ui_name = "JonesDialog", chose = { count[self.index], true } })
-    else
-        bole:postEvent("mng_newDialog", { msg = "start", ui_name = "JonesDialog", chose = { count[self.index] } })
-    end
-
+    bole:getAudioManage():stopAudio("s2")
+    bole:getAudioManage():stopAudio("s3")
+    bole:getAudioManage():stopAudio("s4")
+    bole:getAudioManage():stopAudio("w3")
     self:removeFromParent()
 end
 
@@ -760,7 +764,7 @@ function JonesGame:touchEvent(sender, eventType)
             self:clickCell(4)
         elseif name == "touch_5" then
             self:clickCell(5)
-        elseif name == "btn" then
+        elseif name == "btn_collect" then
             self:gameOver()
         end
     elseif eventType == ccui.TouchEventType.canceled then

@@ -9,7 +9,9 @@ function ClubRankLayer:onCreate()
     btn_close:addTouchEventListener(handler(self, self.touchEvent))
     self.txt_rank = root:getChildByName("txt_rank")
 end
-
+function ClubRankLayer:onKeyBack()
+    self:closeUI()
+end
 function ClubRankLayer:updateUI(data)
     self:initRank(data.result)
 end

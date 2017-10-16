@@ -6,7 +6,7 @@ local ACTION_IDLE = 1
 local ACTION_START = 2
 local ACTION_STEP = 3
 local ACTION_STOP = 4
-
+--目前是升级老虎机使用
 function SimpleMoveAction:ctor(data, node)
     --匀速滚动时间
     self.time = data.time

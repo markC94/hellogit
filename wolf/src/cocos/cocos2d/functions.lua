@@ -19,14 +19,20 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
 ]]
-local _print_mine = print
-print = function(info, force)
-    if DEBUG > 0 or force then
-        _print_mine(info)
+
+function setDebugForPrint(mode)
+    if DEBUG == 0 and mode then
+        DEBUG = 3
+    end
+
+    if DEBUG == 0 then
+        print = function() end
+    elseif DEBUG == 3 then
+        print = release_print
     end
 end
+setDebugForPrint()
 
 function printLog(tag, fmt, ...)
     local t = {
@@ -56,6 +62,8 @@ local function dump_value_(v)
 end
 
 function dump(value, desciption, nesting, ignoreKeys)
+    if DEBUG == 0 then return end
+
     if type(nesting) ~= "number" then nesting = 5 end
 
     local lookupTable = {}
@@ -426,6 +434,13 @@ function table.nums(t)
         count = count + 1
     end
     return count
+end
+
+function table.empty(t)
+    for k, v in pairs(t) do
+        return false
+    end
+    return true
 end
 
 function table.keys(hashtable)

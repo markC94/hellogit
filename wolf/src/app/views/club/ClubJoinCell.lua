@@ -3,90 +3,120 @@
 -- 此文件由[BabeLua]插件自动生成
 
 local ClubJoinCell = class("ClubJoinCell", ccui.Layout)
-local COLOR_0 = { r = 22, g = 71, b = 137 }
-local COLOR_1 = { r = 0, g = 29, b = 82 }
-local COLOR_2 = { r = 255, g = 255, b = 255 }
-local COLOR_3 = { r = 254, g = 174, b = 116 }
-function ClubJoinCell:ctor(data,league_level)
-    bole.socket:registerCmd("deal_club_invitation", self.reInvitation, self)
-    self.data_ = data
+
+local COLOR_0 = { r = 255, g = 255, b = 255 }
+local COLOR_1 = { r = 3, g = 27, b = 84 }
+local COLOR_2 = { r = 24, g = 50, b = 73 }
+
+function ClubJoinCell:ctor(data)
+    
     self.cell_type = 3
-    self:setContentSize( { width = 1065, height = 114 })
-    self.node = cc.CSLoader:createNode("csb/club_cell/ClubJoinCell.csb")
+    self:setContentSize( { width = 1150 , height = 98 })
+    self.node = cc.CSLoader:createNode("club/ClubJoinCell.csb")
     self:addChild(self.node)
     self:setTouchEnabled(true)
     self:setSwallowTouches(false)
     self:addTouchEventListener(handler(self, self.touchEvent))
-    self.league_level=league_level
-    self.club_id=data.id
+
     local root = self.node:getChildByName("root")
-
     self.img_bg = root:getChildByName("img_bg")
-    self.img_bg:loadTexture("club/club_join_item03.png")
-
-    local txt_name = root:getChildByName("txt_name")
-    txt_name:setString(data.name)
-
-    local img_icon = root:getChildByName("img_icon")
-    -- 测试代码
-    
-    local icon_path = bole:getClubIconStr(data.icon)
-    if icon_path ~= nil then
-        img_icon:loadTexture(icon_path)
-    else
-        img_icon:loadTexture(bole:getClubIconStr("10" ..(data.icon % 5 + 1)))
-    end
-    local txt_tips = root:getChildByName("txt_tips")
-    local node_head = root:getChildByName("node_head")
-    local nHead=bole:getNewHeadView({name="none",user_id=data.leader_id})
-    nHead:updatePos(nHead.POS_CLUB_LEADER)
-    node_head:addChild(nHead)
-    local txt_num = root:getChildByName("txt_num")
-    txt_num:setString(data.current_u_count .. "/" .. data.max_u_count)
-    local img_rank = root:getChildByName("img_rank")
-    local txt_rank = root:getChildByName("txt_rank")
-    txt_rank:setString("Rank " .. data.league_rank)
-
+    self.txt_name = root:getChildByName("txt_name")
+    self.img_icon = root:getChildByName("img_icon")
+    self.txt_tips = root:getChildByName("txt_tips")
+    self.node_head = root:getChildByName("node_head")
     self.img_friend = root:getChildByName("img_friend")
-    local txt_friend = self.img_friend:getChildByName("txt_friend")
+    self.txt_num = root:getChildByName("txt_num")
+    self.img_rank = root:getChildByName("img_rank")
+    self.txt_rank = root:getChildByName("txt_rank")
     self.img_mail = root:getChildByName("img_mail")
-    self.img_mail:setVisible(false)
     self.img_pending = root:getChildByName("img_pending")
-    self.img_pending:setVisible(false)
     self.img_level = root:getChildByName("img_level")
+    self.txt_leader = root:getChildByName("txt_leader")
+    self.txt_member = root:getChildByName("txt_member")
 
-    local txt_level = self.img_level:getChildByName("txt_level")
-    txt_level:setString(data.require_level)
+    self.friend_txt = self.img_friend:getChildByName("txt_friend")
+    self.mail_txt = self.img_mail:getChildByName("txt_name")
+    self.pending_txt = self.img_pending:getChildByName("txt_name")
 
-    local txt_tips = root:getChildByName("txt_tips")
-    if tonumber(data.qualification)  == 0 then
-        txt_tips:setString("Anyone can join")
-    elseif tonumber(data.qualification)  == 1 then
-        txt_tips:setString("Invite")
+    self:refreshClubInfo(data)
+end
+
+function ClubJoinCell:refreshClubInfo(data)
+    self.data_ = data
+
+    self.img_bg:loadTexture("loadImage/club_join_item_normal.png")
+    self.txt_name:setString(self.data_.name)
+    self.img_rank:loadTexture(bole:getClubManage():getLeagueIconPath(self.data_.league_level))
+
+    self.img_icon:loadTexture(bole:getClubManage():getClubIconPath(data.icon))
+ 
+    if tonumber(self.data_.qualification)  == 0 then
+        self.txt_tips:setString("Anyone can join")
+    elseif tonumber(self.data_.qualification)  == 1 then
+        self.txt_tips:setString("Invite Only")
     end
 
-    local txt_leader = root:getChildByName("txt_leader")
-    local txt_member = root:getChildByName("txt_member")
+    local nHead=bole:getNewHeadView({name="none",user_id=self.data_.leader_id,icon=self.data_.leader_icon})
+    nHead:updatePos(nHead.POS_CLUB_LEADER)
+    self.node_head:removeAllChildren()
+    self.node_head:addChild(nHead)
 
-    if self.cell_type ~= 1 then
-        txt_name:setColor(COLOR_0)
-        txt_leader:setColor(COLOR_3)
-        txt_member:setColor(COLOR_3)
-        txt_rank:setColor(COLOR_1)
+    self.txt_num:setString(self.data_.current_u_count .. "/" .. self.data_.max_u_count)
+
+    self.txt_rank:setString("Rank " .. self.data_.league_rank)
+
+    if self.data_.friends_count ~= nil then
+        self.img_friend:getChildByName("txt_friend"):setString(self.data_.friends_count)
+    else
+        self.img_friend:setVisible(false)
     end
 
-    if tonumber(data.applied) == 1 then
+    self.img_mail:setVisible(false)
+    self.img_pending:setVisible(false)
+
+    self.img_level:getChildByName("txt_level"):setString( self.data_.require_level)
+
+    if tonumber(self.data_.applied) == 1 then
         self.img_level:setVisible(false)
         self.img_pending:setVisible(true)
-        self.img_bg:loadTexture("club/club_join_item02.png")
+        self.img_bg:loadTexture("loadImage/club_join_item_ask.png")
+        self.cell_type = 1
     end
 
-    if data.inviter == 1 then
+    if self.data_.inviter == 1 then
         self.img_level:setVisible(false)
         self.img_mail:setVisible(true)
-        self.img_bg:loadTexture("club/club_join_item01.png")
+        self.img_bg:loadTexture("loadImage/club_join_item_invited.png")
+        self.cell_type = 1
+    end
+
+    if self.cell_type == 1 then
+        --self.txt_name:setTextColor(COLOR_0)
+        --self.txt_name:enableOutline(COLOR_0)
+        --self.txt_tips:setTextColor(COLOR_0)
+        --self.txt_num:setTextColor(COLOR_0)
+        --self.txt_rank:setTextColor(COLOR_0)
+        --self.txt_member:setTextColor(COLOR_0)
+        --self.txt_member:enableOutline(COLOR_0)
+        --self.friend_txt:setTextColor(COLOR_0)
+        --self.mail_txt:setTextColor(COLOR_0)
+        --self.pending_txt:setTextColor(COLOR_0)
+        --self.img_friend:loadTexture("loadImage/club_join_friendIcon2.png")
+    else
+        --self.txt_name:setTextColor(COLOR_2)
+        --self.txt_name:enableOutline(COLOR_2)
+        --self.txt_tips:setTextColor(COLOR_1)
+        --self.txt_num:setTextColor(COLOR_2)
+        --self.txt_rank:setTextColor(COLOR_2)
+        --self.txt_member:setTextColor(COLOR_2)
+        --self.txt_member:enableOutline(COLOR_2)
+        --self.friend_txt:setTextColor(COLOR_2)
+        --self.mail_txt:setTextColor(COLOR_2)
+        --self.pending_txt:setTextColor(COLOR_2)
+        --self.img_friend:loadTexture("loadImage/club_join_friendIcon1.png")
     end
 end
+
 
 function ClubJoinCell:touchEvent(sender, eventType)
     local name = sender:getName()
@@ -102,39 +132,18 @@ function ClubJoinCell:touchEvent(sender, eventType)
         local bPos=sender:getTouchBeganPosition()
         local ePos=sender:getTouchEndPosition()
         if math.abs(bPos.y-ePos.y)<50 then
-            --bole:getClubControl():showClubInfo(self.club_id)
-            if self.data_.inviter == 1 then
-                bole:getUIManage():openClubTipsView(17,function() self:sendInviteApp(1) end, function() self:sendInviteApp(0) end) 
-            else
-                bole:getUIManage():openUI("ClubInfoLayer",true,"csb/club")
-                bole:postEvent("initClubInfoId",self.club_id)
-            end
+            bole:getUIManage():openClubInfoLayer(self.data_.id)
         end
     elseif eventType == ccui.TouchEventType.canceled then
         print("Touch Cancelled")
     end
 end
 
-function ClubJoinCell:sendInviteApp(re)
-    bole.socket:send("deal_club_invitation",{result = re , club_id = self.club_id},true) 
-end
-
-function ClubJoinCell:reInvitation(t,data)
-        if data.error ~= nil then
-            if data.error == 6 then
-                bole:getUIManage():openClubTipsView(7,nil)
-            end
-        end
-
-        if data.id ~= nil then
-            bole:postEvent("applyJoiningClubNow", data)
-        end
-end
 
 function ClubJoinCell:refreshStatus()
         self.img_level:setVisible(false)
         self.img_pending:setVisible(true)
-        self.img_bg:loadTexture("club/club_join_item02.png")
+        self.img_bg:loadTexture("loadImage/shop_itemBg2.png")
 end
 
 return ClubJoinCell

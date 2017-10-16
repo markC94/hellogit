@@ -2,53 +2,25 @@
 --Date
 --此文件由[BabeLua]插件自动生成
 
-local Theme_Farm = class("Theme_Farm", bole:getTable("app.theme.BaseTheme"))
+local Theme_farm = class("Theme_farm", bole:getTable("app.theme.BaseTheme"))
 
-function Theme_Farm:ctor(themeId, app)
-    print("Theme_Farm:ctor")
-    Theme_Farm.super.ctor(self, themeId, app)
+function Theme_farm:ctor(themeId, app)
+    print("Theme_farm:ctor")
+    Theme_farm.super.ctor(self, themeId, app)
 end
 
-function Theme_Farm:onDealWithMiniGameData(data)
-    print("Theme_Farm:onDealWithMiniGameData")
---    if data then
---        if data.freeSpin and data.freeSpin > 0 then
---            self.isHaveMiniGame = true
---            self.freeSpinCount = data.freeSpin
---            self.freeSpinFeatureId = data.feature_id
---            self.freeSpinMultiple = data.multiple
-
---            self.freeSpinCoins = 0
---            self.freeSpinCollect = 0
---        end
---    end
+function Theme_farm:createOtherNodes(spinBg, orderTable)
+    local frameBgSize = spinBg:getContentSize()
+    local flowerSp = cc.Sprite:create(self.app:getRes(self.themeId, "farm_top_flower", "png"))
+    flowerSp:setPosition(frameBgSize.width/2, frameBgSize.height + 40)
+    spinBg:addChild(flowerSp)
 end
 
-function Theme_Farm:enterThemeDataFilter(data)
-    print("Theme_Farm:enterThemeDataFilter")
-    Theme_Farm.super.enterThemeDataFilter(self, data)
+function Theme_farm:addOtherAsyncImage(weights)
+    table.insert(weights, self.app:getRes(self.themeId, "farm_top_flower", "png"))
+    table.insert(weights, self.app:getSymbolAnimImg(self.themeId, "tishi"))
 end
 
-function Theme_Farm:onDataFilter(data)
-    print("Theme_Farm:onDataFilter")
-    Theme_Farm.super.onDataFilter(self, data)
-end
-
-function Theme_Farm:addListeners()
-    Theme_Farm.super.addListeners(self)
-    self:addListenerForNext("popupDialog", self.onMiniEffect)
-end
-
-function Theme_Farm:setFreeSpinPosition(x, y)
-    y = y - 16
-    Theme_Farm.super.setFreeSpinPosition(self, x, y)
-end
-
-function Theme_Farm:addOtherAsyncImage(weights)
-    local promptKey = string.format("theme/theme%d/tishi.png", self.themeId)
-    table.insert(weights, promptKey)
-end
-
-return Theme_Farm
+return Theme_farm
 
 --endregion

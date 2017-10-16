@@ -21,7 +21,6 @@ end
 
 function ParabolaNode:step(dt)
     if self.dead then return end
-
     self.elapsed = self.elapsed + dt
     local syt = self.vy0*self.elapsed - 0.5*self.a*self.elapsed*self.elapsed
     if syt < 0 then
@@ -35,7 +34,7 @@ function ParabolaNode:step(dt)
 
     local sxt = self.vx0*self.elapsed
     self.node:setPosition(self.sx0+sxt, self.sy0+syt)
-    self.node:setScale(0.4+(syt/self.maxHeight)*0.8)
+    self.node:setScale(1+(syt/self.maxHeight)*1.2)
 end
 
 function ParabolaNode:isDead()

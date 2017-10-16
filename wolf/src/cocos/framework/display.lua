@@ -27,20 +27,20 @@ local display = {}
 local director = cc.Director:getInstance()
 local view = director:getOpenGLView()
 
-if not view then
-    local width = 960
-    local height = 640
-    if CC_DESIGN_RESOLUTION then
-        if CC_DESIGN_RESOLUTION.width then
-            width = CC_DESIGN_RESOLUTION.width
-        end
-        if CC_DESIGN_RESOLUTION.height then
-            height = CC_DESIGN_RESOLUTION.height
-        end
-    end
-    view = cc.GLViewImpl:createWithRect("Cocos2d-Lua", cc.rect(0, 0, width, height))
-    director:setOpenGLView(view)
-end
+--if not view then
+--    local width = 960
+--    local height = 640
+--    if CC_DESIGN_RESOLUTION then
+--        if CC_DESIGN_RESOLUTION.width then
+--            width = CC_DESIGN_RESOLUTION.width
+--        end
+--        if CC_DESIGN_RESOLUTION.height then
+--            height = CC_DESIGN_RESOLUTION.height
+--        end
+--    end
+--    view = cc.GLViewImpl:createWithRect("Cocos2d-Lua", cc.rect(0, 0, width, height))
+--    director:setOpenGLView(view)
+--end
 
 local framesize = view:getFrameSize()
 local textureCache = director:getTextureCache()
@@ -48,39 +48,39 @@ local spriteFrameCache = cc.SpriteFrameCache:getInstance()
 local animationCache = cc.AnimationCache:getInstance()
 
 -- auto scale
-local function checkResolution(r)
-    r.width = checknumber(r.width)
-    r.height = checknumber(r.height)
-    r.autoscale = string.upper(r.autoscale)
-    assert(r.width > 0 and r.height > 0,
-        string.format("display - invalid design resolution size %d, %d", r.width, r.height))
-end
+--local function checkResolution(r)
+--    r.width = checknumber(r.width)
+--    r.height = checknumber(r.height)
+--    r.autoscale = string.upper(r.autoscale)
+--    assert(r.width > 0 and r.height > 0,
+--        string.format("display - invalid design resolution size %d, %d", r.width, r.height))
+--end
 
-local function setDesignResolution(r, framesize)
-    if r.autoscale == "FILL_ALL" then
-        view:setDesignResolutionSize(framesize.width, framesize.height, cc.ResolutionPolicy.FILL_ALL)
-    else
-        local scaleX, scaleY = framesize.width / r.width, framesize.height / r.height
-        local width, height = framesize.width, framesize.height
-        if r.autoscale == "FIXED_WIDTH" then
-            width = framesize.width / scaleX
-            height = framesize.height / scaleX
-            view:setDesignResolutionSize(width, height, cc.ResolutionPolicy.NO_BORDER)
-        elseif r.autoscale == "FIXED_HEIGHT" then
-            width = framesize.width / scaleY
-            height = framesize.height / scaleY
-            view:setDesignResolutionSize(width, height, cc.ResolutionPolicy.NO_BORDER)
-        elseif r.autoscale == "EXACT_FIT" then
-            view:setDesignResolutionSize(r.width, r.height, cc.ResolutionPolicy.EXACT_FIT)
-        elseif r.autoscale == "NO_BORDER" then
-            view:setDesignResolutionSize(r.width, r.height, cc.ResolutionPolicy.NO_BORDER)
-        elseif r.autoscale == "SHOW_ALL" then
-            view:setDesignResolutionSize(r.width, r.height, cc.ResolutionPolicy.SHOW_ALL)
-        else
-            printError(string.format("display - invalid r.autoscale \"%s\"", r.autoscale))
-        end
-    end
-end
+--local function setDesignResolution(r, framesize)
+--    if r.autoscale == "FILL_ALL" then
+--        view:setDesignResolutionSize(framesize.width, framesize.height, cc.ResolutionPolicy.FILL_ALL)
+--    else
+--        local scaleX, scaleY = framesize.width / r.width, framesize.height / r.height
+--        local width, height = framesize.width, framesize.height
+--        if r.autoscale == "FIXED_WIDTH" then
+--            width = framesize.width / scaleX
+--            height = framesize.height / scaleX
+--            view:setDesignResolutionSize(width, height, cc.ResolutionPolicy.NO_BORDER)
+--        elseif r.autoscale == "FIXED_HEIGHT" then
+--            width = framesize.width / scaleY
+--            height = framesize.height / scaleY
+--            view:setDesignResolutionSize(width, height, cc.ResolutionPolicy.NO_BORDER)
+--        elseif r.autoscale == "EXACT_FIT" then
+--            view:setDesignResolutionSize(r.width, r.height, cc.ResolutionPolicy.EXACT_FIT)
+--        elseif r.autoscale == "NO_BORDER" then
+--            view:setDesignResolutionSize(r.width, r.height, cc.ResolutionPolicy.NO_BORDER)
+--        elseif r.autoscale == "SHOW_ALL" then
+--            view:setDesignResolutionSize(r.width, r.height, cc.ResolutionPolicy.SHOW_ALL)
+--        else
+--            printError(string.format("display - invalid r.autoscale \"%s\"", r.autoscale))
+--        end
+--    end
+--end
 
 local function setConstants()
     local sizeInPixels = view:getFrameSize()
@@ -138,28 +138,30 @@ local function setConstants()
     printInfo("#")
 end
 
-function display.setAutoScale(configs)
-    if type(configs) ~= "table" then return end
+--function display.setAutoScale(configs)
+--    if type(configs) ~= "table" then return end
 
-    checkResolution(configs)
-    if type(configs.callback) == "function" then
-        local c = configs.callback(framesize)
-        for k, v in pairs(c or {}) do
-            configs[k] = v
-        end
-        checkResolution(configs)
-    end
+--    checkResolution(configs)
+--    if type(configs.callback) == "function" then
+--        local c = configs.callback(framesize)
+--        for k, v in pairs(c or {}) do
+--            configs[k] = v
+--        end
+--        checkResolution(configs)
+--    end
 
-    setDesignResolution(configs, framesize)
+--    setDesignResolution(configs, framesize)
 
-    printInfo(string.format("# design resolution size       = {width = %0.2f, height = %0.2f}", configs.width, configs.height))
-    printInfo(string.format("# design resolution autoscale  = %s", configs.autoscale))
-    setConstants()
-end
+--    printInfo(string.format("# design resolution size       = {width = %0.2f, height = %0.2f}", configs.width, configs.height))
+--    printInfo(string.format("# design resolution autoscale  = %s", configs.autoscale))
+--    setConstants()
+--end
 
-if type(CC_DESIGN_RESOLUTION) == "table" then
-    display.setAutoScale(CC_DESIGN_RESOLUTION)
-end
+--if type(CC_DESIGN_RESOLUTION) == "table" then
+--    display.setAutoScale(CC_DESIGN_RESOLUTION)
+--end
+
+setConstants()
 
 display.COLOR_WHITE = cc.c3b(255, 255, 255)
 display.COLOR_BLACK = cc.c3b(0, 0, 0)

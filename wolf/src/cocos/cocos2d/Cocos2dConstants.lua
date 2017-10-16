@@ -294,15 +294,15 @@ cc.GLYPHCOLLECTION_NEHE    = 1
 cc.GLYPHCOLLECTION_ASCII   = 2
 cc.GLYPHCOLLECTION_CUSTOM  = 3
 
-cc.ResolutionPolicy =
-{
-    EXACT_FIT = 0,
-    NO_BORDER = 1,
-    SHOW_ALL  = 2,
-    FIXED_HEIGHT  = 3,
-    FIXED_WIDTH  = 4,
-    UNKNOWN  = 5,
-}
+--cc.ResolutionPolicy =
+--{
+--    EXACT_FIT = 0,
+--    NO_BORDER = 1,
+--    SHOW_ALL  = 2,
+--    FIXED_HEIGHT  = 3,
+--    FIXED_WIDTH  = 4,
+--    UNKNOWN  = 5,
+--}
 
 cc.LabelEffect =
 {

@@ -1,11 +1,9 @@
-local SocketSTATE = {
+SocketSTATE = {
 	close = 0,
 	connected = 1,
 }
 
-local SOCKET_EVENT = 11
-
-local MessageType = {
+MessageType = {
 	socket_open = 2,
 	socket_message = 3,
 	socket_error = 4,
@@ -17,8 +15,154 @@ local MessageType = {
     EVENT_BLMESSAGE = 10001,
 }
 
-cc.exports.SocketSTATE = SocketSTATE
-cc.exports.MessageType = MessageType
+
+Socket = {}
+
+
+function Socket:create()
+	self.state = SocketSTATE.close
+
+	self.cmdMap = {}
+    self.delegates = {}
+    self.stopSecondRecords = {}
+
+	self.socket = cc.BLSocket:getInstance()
+	local function callback(t, data)
+		self:recv(t, data)
+	end
+	ScriptHandlerMgr:getInstance():registerScriptHandler(self.socket, callback, MessageType.EVENT_BLMESSAGE)
+
+    local function appEnterBackgroundCallback()
+        bole.pause_time = os.time()
+    end
+    ScriptHandlerMgr:getInstance():registerScriptHandler(cc.AppInfo:getInstance(), appEnterBackgroundCallback, MessageType.enter_background)
+
+    local function appEnterForegroundCallback()
+        if bole.pause_time then
+            bole.resume_time = os.time() - bole.pause_time
+        end
+    end
+    ScriptHandlerMgr:getInstance():registerScriptHandler(cc.AppInfo:getInstance(), appEnterForegroundCallback, MessageType.enter_foreground)
+end
+
+function Socket:isEmptyDelegate()
+    local flag = true
+    for _, v in pairs(self.delegates) do
+        flag = false
+        break
+    end
+    return flag
+end
+
+function Socket:registerCmd(id, callback, param)
+	if callback then
+		self.cmdMap[id] = {callback, param}
+	end
+end
+
+function Socket:unregisterCmd(id)
+	if self.cmdMap[id] then
+		self.cmdMap[id] = nil
+	end
+end
+
+function Socket:connect()
+    release_print("Socket:connect")
+    self.socket:init(SERVER_IP, SERVER_PORT)
+end
+
+function Socket:isConnected()
+	return self.state == SocketSTATE.connected
+end
+
+function Socket:send(...)
+    local data = {...}
+    dump(data, "Socket:send")
+	if self.state == SocketSTATE.connected then
+        local msgId = data[1]
+        local isNeedToCheck = data[3]
+        if isNeedToCheck then
+            data[3] = nil
+        end
+
+        if self.stopSecondRecords[msgId] then
+            return
+        end
+
+		self.socket:sendTable(data)
+
+        if isNeedToCheck then
+            self.stopSecondRecords[msgId] = true
+        end
+	end
+end
+
+function Socket:oncmd(data)
+    local id = data[1]
+	if self.cmdMap[id] then
+		local func = self.cmdMap[id][1]
+		local param = self.cmdMap[id][2]
+		if param then 
+			func(param, id, data[2])
+		else
+			func(id, data[2])
+		end
+	end
+
+    if id == "error" then
+        self.stopSecondRecords = {}
+        if bole.postEvent then
+            bole:postEvent("sendMsgError")
+        end
+    else
+        self.stopSecondRecords[id] = nil
+    end
+end
+
+function Socket:onStateChange(id, data)
+    self.stopSecondRecords = {}
+	for k, v in pairs(self.delegates) do
+		v(k, id, data)
+	end
+end
+
+function Socket:recv(t, data)
+    if dump then
+        dump(data, "socketRecvData cmd=" .. t, 3)
+    end
+
+    if t == MessageType.socket_message then
+		self:oncmd(data)
+	else
+		if t == MessageType.socket_open then
+			self.state = SocketSTATE.connected
+		else
+			self.state = SocketSTATE.close
+		end
+		self:onStateChange(t, data)
+	end
+end
+
+function Socket:registerDelegate(id, callback)
+	self.delegates[id] = callback
+end
+
+function Socket:unregisterDelegate(id)
+	if self.delegates[id] then
+		self.delegates[id] = nil
+	end
+end
+
+function Socket:close()
+	self.socket:closeSkt()
+end
+
+
+
+
+
+
+
 
 --[[
 local ConnectLost = class("ConnectLost")
@@ -77,175 +221,3 @@ function ConnectLost:onStateChange( t, data)
 	end
 end
 --]]
-
-
-local Socket = {}
-
-function Socket:onCreate(server, port)
-	self.server = server
-	self.port = port or 80
-	self.state = SocketSTATE.close
-	self.cmdMap = {}
-    self.delegates = {}
-    --[[
-	self.delegates = {
-		[ConnectLost:getInstance()] = ConnectLost:getInstance().onStateChange
-	}
-    ]]
-	self.socket = cc.BLSocket:getInstance()
-	local function callback( t, data )
-		self:recv(t,data)
-	end
-    self.stopSecondRecords = {}
-	ScriptHandlerMgr:getInstance():registerScriptHandler(self.socket,callback,MessageType.EVENT_BLMESSAGE)
-end
-
-function Socket:registerCmd( id, callback, param)
-	if callback then
---		if self.cmdMap[id] then
---			--log.i("duplicated cmd ",id)
---		end
-		self.cmdMap[id] = {callback,param}
-	end
-end
-function Socket:unregisterCmd( id)
-	-- body
-	if self.cmdMap[id] then
-		self.cmdMap[id] = nil
-	end
-end
-
-function Socket:connect()
-    print("Socket:connect")
-    self.socket:init(self.server, self.port)
-end
-
-function Socket:isConnected( ... )
-	-- body
-	return self.state == SocketSTATE.connected
-end
-
-function Socket:send(...)
-	if self.state == SocketSTATE.connected then
-        local data = {...}
-        local msgId = data[1]
-        local isNeedToCheck = data[3]
-        if isNeedToCheck then
-            data[3] = nil
-        end
-
-        if self.stopSecondRecords[msgId] then
-            return
-        end
-
---		if #data == 1 and type(data[1]) == "table" then
---			data = data[1]
---		end
-        
-		--log.d("socket send", data)
-		self.socket:sendTable(data)
-
-        if isNeedToCheck then
-            self.stopSecondRecords[msgId] = true
-        end
-	end
-end
-
-function Socket:oncmd(data)
-	-- log.d("socket on cmd ",data) --,self.cmdMap[id])
-    local id = data[1]
-	if self.cmdMap[id] then
-		local func = self.cmdMap[id][1]
-		local param = self.cmdMap[id][2]
-		if param then 
-			func(param, id, data[2])
-		else
-			func(id, data[2])
-		end
-        --[[
-	elseif id == "force_facebook_logout"  then
-		FacebookLoginScene.new():run()
-		local d = Dialog.new("You were be kicked out by another device")
-		d:show()
-		-- self.socket:closeSkt()
-	else
-		log.d("unhandle cmd ",data)
-        ]]
-	end
-
-    if id == "error" then
-        self.stopSecondRecords = {}
-    else
-        self.stopSecondRecords[id] = nil
-    end
-end
-
-function Socket:onStateChange( type, data)
-	-- body
-	--log.d("type, data",type,data)
-    self.stopSecondRecords = {}
-	for k,v in pairs(self.delegates) do
-		v(k, type, data)
-	end
-end
-
-local MAX_RELOGIN_INTERVAL = 3
-function Socket:recv(t, data)
-    dump(data, "socketRecvData cmd=" .. t, 3)
-	if t == MessageType.enter_background then
-		--LoginControl:getInstance():onEnterBackground()
-	elseif t == MessageType.enter_foreground then
-		--LoginControl:getInstance():onEnterForeground()
-	elseif t == MessageType.socket_message then
-		self:oncmd(data)
-		--ConnectLost:getInstance():onStateChange(t)
-	else
-		if t==MessageType.socket_open then --open
-			self.state = SocketSTATE.connected
-		elseif t == MessageType.socket_error then
-			self.state = SocketSTATE.close
-		elseif t == MessageType.socket_close then
-			self.state = SocketSTATE.close
-		else
-			--log.i("unknow message type",t, data)
-		end
-        --[[
-		local time = LoginControl:getInstance().enterForegroundTime
-		if time then
-		 	if self.state == SocketSTATE.close and os.time() - time < MAX_RELOGIN_INTERVAL then
-		 		LoginControl:getInstance():relogin()
-		 		LoginControl:getInstance().enterForegroundTime = nil
-		 		return
-		 	end
-		 	if os.time() - time >= MAX_RELOGIN_INTERVAL then
-			 	LoginControl:getInstance().enterForegroundTime = nil
-			end
-		end
-        ]]
-		self:onStateChange(t, data)
-	end
-	
-end
-
-function Socket:registerDelegate(id, callback)
-	if self.delegates[id] then
-		--log.i("duplicated register socket state", id, callback)
-	end
-	self.delegates[id] = callback
-end
-
-function Socket:unregisterDelegate(id)
-	if self.delegates[id] then
-		self.delegates[id]  = nil
-	else
-		--log.i("socket delegate already be deleted",id)
-	end
-end
-
-
-function Socket:close()
-	self.socket:closeSkt()
-end
-
-return Socket
-

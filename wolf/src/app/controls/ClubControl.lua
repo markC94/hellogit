@@ -20,7 +20,7 @@ end
 function ClubControl:oncmd(t, data)
     -- body
     if t == bole.SERVER_GET_CLUB_INFO then
-       bole:getUIManage():openUI("ClubInfoLayer",true,"csb/club")
+       bole:getUIManage():openUI("ClubInfoLayer",true,"club")
        dump(data,"ClubInfoLayer ui")
        bole:postEvent("ClubInfoLayer",data)
     end

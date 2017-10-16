@@ -5,146 +5,149 @@
 local ShopLayer = class("ShopLayer", cc.load("mvc").ViewBase)
 
 function ShopLayer:onCreate()
+    self.bonus = bole:getBuyManage():getFreeCoinsNum()
+ 
     print("VipLayer:onCreate")
     self.root_ = self:getCsbNode():getChildByName("root")
-    self.top_ = self.root_:getChildByName("top")
 
-    self:initTop(self.top_)
+    self:initTop()
+    self:initBonusPanel()
     self.listView_ = self.root_:getChildByName("ListView")
+    self.listView_:setScrollBarOpacity(0)
+
+    self:refrushShowInfo()
+    self:refrushButton("coins")
 
     self:adaptScreen()
-
-    self:reShopInfo("shop_info", data)
 end
 
+function ShopLayer:onKeyBack()
+   self:closeUI()
+end
 
 function ShopLayer:onEnter()
-    bole.socket:registerCmd("collect_shop_bonus", self.reCollect, self)
-    --bole:addListener("initFrirndList", self.initFrirndList, self, nil, true)
+    bole:addListener("show_collect_shop_bonus_act", self.showBonusAct, self, nil, true)
+    bole:addListener("showBuyAct_shopLayer", self.showBuyAct, self, nil, true)
+    bole:addListener("openDiamondShop", self.reOpenDiamondShop, self, nil, true)
 end
 
-function ShopLayer:reShopInfo(t, data)
-    if t == "shop_info" then
-        self.shopdata_ = data
-        self:refrushShowInfo()
-        self:refrushButton("coins")
-    end
+function ShopLayer:reOpenDiamondShop(data)
+    self:refrushShowInfo()
+    self:refrushButton("diamond")
 end
 
-function ShopLayer:initTop(root)
+function ShopLayer:initTop()
     local btn_coins = self.root_:getChildByName("btn_coins")
     btn_coins:addTouchEventListener(handler(self, self.topButtomTouchEvent))
+    self.btn_coins_ = btn_coins
 
     local btn_diamond = self.root_:getChildByName("btn_diamond")
     btn_diamond:addTouchEventListener(handler(self, self.topButtomTouchEvent))
+    self.btn_diamond_ = btn_diamond
 
     local btn_close = self.root_:getChildByName("btn_close")
     btn_close:addTouchEventListener(handler(self, self.touchEvent))
 
     self.shop_type_ = 1
 
-    self.txtTitle_ = root:getChildByName("txt_title")
-    self.btn_freeCoins_ = root:getChildByName("btn_freeCoins")
-    self.btn_freeCoins_:addTouchEventListener(handler(self, self.touchEvent))
-
-    local btn_vip = root:getChildByName("btn_vip")
+    local btn_vip = self.root_:getChildByName("vip")
     btn_vip:addTouchEventListener(handler(self, self.touchEvent))
+    self.vipIcon_ = btn_vip:getChildByName("vipIcon")
+    self.vipLevel_ = btn_vip:getChildByName("vipLevel")
+    self.vipInfon_ = btn_vip:getChildByName("vipInfo")
 
-    self.btn_countdown_ = root:getChildByName("btn_countdown")
-    self.btn_countdown_:addTouchEventListener(handler(self, self.touchEvent))
-   
-    local timeP = self.btn_countdown_:getChildByName("time")
-        self.txt_second1 = timeP:getChildByName("txt_second1")
-        self.txt_second2 = timeP:getChildByName("txt_second2")
-        self.txt_minute1 = timeP:getChildByName("txt_minute1")
-        self.txt_minute2 = timeP:getChildByName("txt_minute2")
-        self.txt_hour1 = timeP:getChildByName("txt_hour1")
-        self.txt_hour2 = timeP:getChildByName("txt_hour2")
-        
+    self.coins_info_ = self.root_:getChildByName("coins_info")
+    self.diamond_info_ = self.root_:getChildByName("diamond_info")
+    self.diamond_image_ = self.root_:getChildByName("diamond_image")
+    self.vip_ = btn_vip
+end
+
+function ShopLayer:initBonusPanel()
+    self.freeCoins_ = self.root_:getChildByName("Panel_freeCoins")
+    self.freeCoins_:setVisible(true)
+    self.freeCoinsNum_ = self.freeCoins_:getChildByName("txt_num")
+    local btn_freeCoins = self.freeCoins_:getChildByName("btn_freeCoins")
+    btn_freeCoins:addTouchEventListener(handler(self, self.touchEvent))
+    self.btn_freeCoins_ = btn_freeCoins
 
 
-    self.freeTitle_ = self.btn_freeCoins_:getChildByName("txt_title")
-    self.freeCoinsNum_ = self.btn_freeCoins_:getChildByName("txt_num")
+    self.countdown_ = self.root_:getChildByName("Panel_countdown")
+    self.countdown_:setVisible(false)
+    local node_clock = self.countdown_:getChildByName("Node_clock")
+    local clockAct = sp.SkeletonAnimation:create("shop_act/biao_1.json", "shop_act/biao_1.atlas")
+    clockAct:setScale(0.65)
+    clockAct:setAnimation(0, "animation", true)
+    node_clock:addChild(clockAct)
+
+    self.time_1 = self.countdown_:getChildByName("time_1")
+    self.time_2 = self.countdown_:getChildByName("time_2")
+    self.unit_1 = self.countdown_:getChildByName("time_unit_1")
+    self.unit_2 = self.countdown_:getChildByName("time_unit_2")
 end
 
 function ShopLayer:refrushShowInfo()
-    self.rfm_ = tonumber(bole:getUserDataByKey("purchase_level"))
-    local storeIdList = {1001,1002,1003,1004,1006}
-    if self.rfm_ < 10 then
-        storeIdList = bole:getConfigCenter():getConfig("store_position", 1, "store_item")
-    elseif self.rfm_ < 20 then
-        storeIdList = bole:getConfigCenter():getConfig("store_position", 10, "store_item")
-    elseif self.rfm_ < 50 then
-        storeIdList = bole:getConfigCenter():getConfig("store_position", 20, "store_item")
-    elseif self.rfm_ < 100 then
-        storeIdList = bole:getConfigCenter():getConfig("store_position", 50, "store_item")
-    else
-        storeIdList = bole:getConfigCenter():getConfig("store_position", 100, "store_item")
-    end
+    self.coinsStoreInfo_ = bole:getBuyManage():getCoinShopData()
+    self.diamondStoreInfo_ = bole:getBuyManage():getDiamondShopData()
+    self.freeCoinsNum_:setString( bole:formatCoins( bole:getBuyManage():getFreeCoinsNum(),15))
 
-    self.coinsStoreInfo_ = {}
-    self.diamondStoreInfo_ = {}
-    for i = # storeIdList, 1 , -1 do
-        local info = {}
-        info.id = storeIdList[i]
-        info.num = bole:getConfigCenter():getConfig("store_coins", storeIdList[i], "coins_amount")
-        info.vipPoints = bole:getConfigCenter():getConfig("store_coins", storeIdList[i], "vip_getpoints")
-        info.price = bole:getConfigCenter():getConfig("price", bole:getConfigCenter():getConfig("store_coins", storeIdList[i], "price_id"), "price")
-        info.reward = bole:getConfigCenter():getConfig("store_coins", storeIdList[i], "store_specialbonus")
-        table.insert(self.coinsStoreInfo_, # self.coinsStoreInfo_ + 1, info)
-    end
-    for i = # storeIdList, 1 , -1 do
-        local info = {}
-        info.id = storeIdList[i]
-        info.num = bole:getConfigCenter():getConfig("store_diamonds", storeIdList[i], "diamonds_amount")
-        info.vipPoints = bole:getConfigCenter():getConfig("store_diamonds", storeIdList[i], "vip_getpoints")
-        info.price = bole:getConfigCenter():getConfig("price", bole:getConfigCenter():getConfig("store_diamonds", storeIdList[i], "price_id"), "price")
-        info.reward = bole:getConfigCenter():getConfig("store_diamonds", storeIdList[i], "store_specialbonus")
-        table.insert(self.diamondStoreInfo_, # self.diamondStoreInfo_ + 1, info)
-    end
+    local sp = cc.Sprite:create(bole:getBuyManage():getVipIconStr())
+    sp:setScale(0.4)
+    self.vipIcon_:addChild(sp)
+    self.vipLevel_:setString(bole:getBuyManage():getVipLevel() + 1)
+    self.vipInfon_:setString(bole:getBuyManage():getShopVipMulShowNum())
 
-    local time = bole:getUserDataByKey("shop_bonus")
-    if time ~= 0 then
-        local loginTime = bole:getUserDataByKey("loginTime")
-        local showTime = time - ( os.time() - loginTime)
-        if showTime > 0 then
+
+    if bole.shop_bonus_time ~= nil then
+        if bole.shop_bonus_time > 0 then
             self.reCollectBonus_ = false
-            self.delayTime = showTime
-            self.btn_freeCoins_:setTouchEnabled(true)
-            self.btn_freeCoins_:setVisible(false)
-            self.btn_countdown_:setVisible(true)
+            self.btn_freeCoins_:setTouchEnabled(false)
+            self.freeCoins_:setVisible(false)
+            self.countdown_:setVisible(true)
             self:startUpdate()
         end
     end
 end
 
+
 function ShopLayer:refrushButton(str)
-    self.root_:getChildByName("btn_coins"):setTouchEnabled(true)
-    self.root_:getChildByName("btn_diamond"):setTouchEnabled(true)
+    self.btn_coins_:setTouchEnabled(true)
+    self.btn_diamond_:setTouchEnabled(true)
 
-    self.root_:getChildByName("img_coins"):setVisible(false)
-    self.root_:getChildByName("img_diamond"):setVisible(false)
- 
-    self.root_:getChildByName("txt_coins"):setTextColor({ r = 119, g = 121, b = 159})
-    self.root_:getChildByName("txt_diamond"):setTextColor({ r = 119, g = 121, b = 159})
+    self.btn_coins_:loadTexture("shop_lobby/ui/shop_tab_dark.png")
+    self.btn_diamond_:loadTexture("shop_lobby/ui/shop_tab_dark.png")
 
+    self.btn_coins_:getChildByName("icon"):setOpacity(117)
+    self.btn_diamond_:getChildByName("icon"):setOpacity(117)
 
-    self.root_:getChildByName("btn_" .. str):setTouchEnabled(false)
-    self.root_:getChildByName("img_" .. str):setVisible(true)
-    self.root_:getChildByName("txt_" .. str):setTextColor({ r = 255, g = 255, b = 255})
+    self.btn_coins_:getChildByName("txt"):setOpacity(117)
+    self.btn_diamond_:getChildByName("txt"):setOpacity(117)
+
+    local btn = self.root_:getChildByName("btn_" .. str)
+    btn:setTouchEnabled(false)
+    btn:loadTexture("shop_lobby/ui/shop_tab_bright.png")
+    btn:getChildByName("txt"):setOpacity(255)
+    btn:getChildByName("icon"):setOpacity(255)
 
     if str == "coins" then
         self.shop_type_ = 1
         self.showList_ = self.coinsStoreInfo_ 
+        self.coins_info_:setVisible(true)
+        self.diamond_info_:setVisible(false)
+        self.vip_:setVisible(true)
+        self.diamond_image_:setVisible(false)
     elseif str == "diamond" then
         self.shop_type_ = 2
         self.showList_ = self.diamondStoreInfo_ 
+        self.coins_info_:setVisible(false)
+        self.diamond_info_:setVisible(true)
+        self.vip_:setVisible(false)
+        self.diamond_image_:setVisible(true)
     end
 
-    self:refrushListView(str)
+    self:refrushListView()
 end
 
-function ShopLayer:refrushListView(str)
+function ShopLayer:refrushListView()
     self.listView_:removeAllChildren()
     for i = 1 , 5 do
         local cell = bole:getEntity("app.views.shop.ShopCell",i,self.shop_type_,self.showList_[i])
@@ -155,11 +158,33 @@ end
 
 function ShopLayer:topButtomTouchEvent(sender, eventType)
     local name = sender:getName()
-    if eventType == ccui.TouchEventType.ended then
+    if eventType == ccui.TouchEventType.began then
+        if name == "btn_coins" then
+            self.btn_coins_:loadTexture("shop_lobby/ui/shop_tab_bright.png")
+            self.btn_coins_:getChildByName("icon"):setOpacity(255)
+            self.btn_coins_:getChildByName("txt"):setOpacity(255)
+        elseif name == "btn_diamond" then
+            self.btn_diamond_:loadTexture("shop_lobby/ui/shop_tab_bright.png")
+            self.btn_diamond_:getChildByName("icon"):setOpacity(255)
+            self.btn_diamond_:getChildByName("txt"):setOpacity(255)
+        end
+    elseif eventType == ccui.TouchEventType.moved then
+
+    elseif eventType == ccui.TouchEventType.ended then
         if name == "btn_coins" then
             self:refrushButton("coins")
         elseif name == "btn_diamond" then
             self:refrushButton("diamond")
+        end
+    elseif eventType == ccui.TouchEventType.canceled then
+        if name == "btn_coins" then
+            self.btn_coins_:loadTexture("shop_lobby/ui/shop_tab_dark.png")
+            self.btn_coins_:getChildByName("icon"):setOpacity(117)
+            self.btn_coins_:getChildByName("txt"):setOpacity(117)
+        elseif name == "btn_diamond" then
+            self.btn_diamond_:loadTexture("shop_lobby/ui/shop_tab_dark.png")
+            self.btn_diamond_:getChildByName("icon"):setOpacity(117)
+            self.btn_diamond_:getChildByName("txt"):setOpacity(117)
         end
     end
 end
@@ -176,8 +201,8 @@ function ShopLayer:touchEvent(sender, eventType)
             self:closeUI()
         elseif name == "btn_freeCoins" then
             self:collectBonus()
-        elseif name == "btn_vip" then
-            bole:getUIManage():openUI("VipLayer",true)
+        elseif name == "vip" then
+            bole:getUIManage():openNewUI("VipLayer",true,"vip","app.views.vip")
         end
     elseif eventType == ccui.TouchEventType.canceled then
         sender:runAction(cc.ScaleTo:create(0.1, 1, 1))
@@ -189,16 +214,22 @@ function ShopLayer:collectBonus()
     bole.socket:send("collect_shop_bonus",{},true) 
 end
 
-function ShopLayer:reCollect(t, data)
-    if t == "collect_shop_bonus" then
-        self.reCollectBonus_ = false
-        self.delayTime = 28800
-        self.btn_freeCoins_:setTouchEnabled(true)
-        self.btn_freeCoins_:setVisible(false)
-        self.btn_countdown_:setVisible(true)
-        self:startUpdate()
-        bole:changeUserDataByKey("coins",100000)
+function ShopLayer:showBonusAct(data)
+    self.reCollectBonus_ = false
+    self:startUpdate()
+    local myHeadPos = cc.p(225,cc.Director:getInstance():getWinSize().height - 50)
+    local startPos = self.btn_freeCoins_:getWorldPosition()
+    startPos.x = startPos.x + 100
+    if bole:getSpinApp():isThemeAlive() then 
+        bole:refreshCoinsAndDiamondInSlot()
+        myHeadPos = cc.p(120,cc.Director:getInstance():getWinSize().height - 50)
     end
+    bole:getAudioManage():playMusic("common_cc",true)
+    bole:getUIManage():flyCoin(startPos,myHeadPos,function() bole:getAudioManage():stopAudio("common_cc") end,nil)
+    performWithDelay(self, function()
+        self.freeCoins_:setVisible(false)
+        self.countdown_:setVisible(true)
+    end , 1.8)
 end
 
 function ShopLayer:startUpdate()
@@ -209,34 +240,46 @@ function ShopLayer:startUpdate()
 end
 
 function ShopLayer:updateTime(dt)
-    if not self.delayTime then
+    if not bole.shop_bonus_time then
         return
     end
-    self.delayTime = self.delayTime - dt
-    if self.delayTime > 0 then
-        local s = math.floor(self.delayTime) % 60
-        local m = math.floor(self.delayTime / 60) % 60
-        local h = math.floor(self.delayTime / 3600) % 24
-        self.txt_second1:setString(math.floor(s / 10))
-        self.txt_second2:setString(math.floor(s % 10))
-        self.txt_minute1:setString(math.floor(m / 10))
-        self.txt_minute2:setString(math.floor(m % 10))
-        self.txt_hour1:setString(math.floor(h / 10))
-        self.txt_hour2:setString(math.floor(h % 10))
+
+    if bole.shop_bonus_time > 0 then
+        local s = math.floor(bole.shop_bonus_time) % 60
+        local m = math.floor(bole.shop_bonus_time / 60) % 60
+        local h = math.floor(bole.shop_bonus_time / 3600) % 24
+
+        if h == 0 then
+            self.unit_1:setString("M")
+            self.unit_2:setString("S")
+            self.time_1:setString(m)
+            self.time_2:setString(s)
+        else
+            self.unit_1:setString("H")
+            self.unit_2:setString("M")
+            self.time_1:setString(h)
+            self.time_2:setString(m)
+        end
     else
-        self.txt_second1:setString(0)
-        self.txt_second2:setString(0)
-        self.txt_minute1:setString(0)
-        self.txt_minute2:setString(0)
-        self.txt_hour1:setString(0)
-        self.txt_hour2:setString(0)
+        if not self.freeCoins_:isVisible() then
+            bole.shop_bonus_time = nil
+            self.unit_1:setString("M")
+            self.unit_2:setString("S")
+            self.time_1:setString(0)
+            self.time_2:setString(0)
+            self.freeCoins_:setVisible(true)
+            self.countdown_:setVisible(false)
+            self.btn_freeCoins_:setTouchEnabled(true)
+        end
     end
 end
 
 function ShopLayer:onExit()
-    bole.socket:unregisterCmd("collect_shop_bonus")
-    --bole:removeListener("initFrirndList", self)
+    bole:removeListener("showBuyAct_shopLayer", self)
+    bole:removeListener("openDiamondShop", self)
+    bole:removeListener("show_collect_shop_bonus_act", self)
 end
+
 
 function ShopLayer:adaptScreen()
     local winSize = cc.Director:getInstance():getWinSize()
@@ -244,6 +287,11 @@ function ShopLayer:adaptScreen()
     self.root_:setPosition(winSize.width / 2, winSize.height / 2)
     self.root_:setScale(0.1)
     self.root_:runAction(cc.ScaleTo:create(0.2,1,1))
+end
+
+function ShopLayer:showBuyAct(data)
+    data = data.result
+    print("showBuyAct_shopLayer")
 end
 
 return ShopLayer

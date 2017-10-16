@@ -7,7 +7,7 @@ function RoommateView:ctor(theme, roomData, order)
     self.theme = theme
     self.roomData = roomData
 
-    local rootNode = cc.CSLoader:createNodeWithVisibleSize("csb/spin/roommateView.csb")
+    local rootNode = cc.CSLoader:createNodeWithVisibleSize("themeInViews/roommateView.csb")
     self.rootNode = rootNode
 
     self:setViews(rootNode, roomData)
@@ -26,7 +26,6 @@ function RoommateView:ctor(theme, roomData, order)
 end
 
 function RoommateView:onEnter()
-    self.isDead = false
 --    bole:addListener("coinsChanged", self.onCoinChanged, self, nil, true)
     bole:addListener("openSlotFuncView", self.openSlotFuncView, self, nil, true)
     bole.socket:registerCmd("b_enter_room", self.onEnterRoom, self)
@@ -43,12 +42,12 @@ function RoommateView:onExit()
     bole.socket:unregisterCmd("b_enter_room")
     bole.socket:unregisterCmd("b_leave_room")
     bole.socket:unregisterCmd("bole.SERVER_B_SYNC")
-    self.isDead = true
 end
 
 function RoommateView:onEnterRoom(t, data)
-    dump(data, "RoommateView:onEnterRoom")
     bole:postEvent("addUserDataToChat", data)
+    bole:postEvent("userEnterRoom",data)
+    self:addUser(data)
     local user_id = data.user_id
     for index, v in ipairs(self.headNodes) do
         if user_id == v.user_id then
@@ -61,7 +60,6 @@ function RoommateView:onEnterRoom(t, data)
         if not v.user_id and (not v.site or site <= v.site) then
             local parentNode = v.node
             parentNode:removeAllChildren()
-
             local headNode = bole:getNewHeadView(data)
             parentNode:addChild(headNode)
             headNode:updatePos(headNode.POS_SPIN_FRIEND)
@@ -77,11 +75,13 @@ end
 
 function RoommateView:sync(t, data)
     if t == bole.SERVER_B_SYNC then
-        bole:postEvent("chat_bigWin",data)
+        bole:postEvent("chat_bigWin", data)
         for index, v in ipairs(self.headNodes) do
-            if v.head:getInfo().user_id==data.user_id then
-                --data.win_type=1
-                v.head:updateInfo(data)
+            if v.head.getInfo then
+                if v.head:getInfo().user_id == data.user_id then
+                    -- data.win_type=1
+                    v.head:updateInfo(data)
+                end
             end
         end
     end
@@ -89,6 +89,8 @@ end
 
 function RoommateView:onExitRoom(t, data)
     dump(data, "RoommateView:onExitRoom")
+    self:removeUser(data)
+    bole:postEvent("userLeaveRoom",data)
     local leaveId = data.user_id
     for index, v in ipairs(self.headNodes) do
         if v.user_id == leaveId then
@@ -152,12 +154,64 @@ end
 function RoommateView:openSlotFuncView(data)
     data = data.result
     if  self.slotFuncView_ ~= nil then
-        self.slotFuncView_:openSlotFuncView(data[1], data[2], self.roomData)
+        self.slotFuncView_:openSlotFuncView(data[1], data[2])
     end
 end
 
 function RoommateView:removeFromParent(isCleanup)
     self.rootNode:removeFromParent(isCleanup)
+end
+
+function RoommateView:addUser(data)
+    -- 判断 当前位置是否有人
+    self:removeUserForSite(data)
+    local players = self.theme.roomInfo.other_players
+    for k , v in pairs(players) do
+        if v.user_id == data.user_id then
+            return
+        end
+    end
+    table.insert(players,data)
+end
+
+
+function RoommateView:removeUserForSite(data)
+    local players = self.theme.roomInfo.other_players
+    for i = 1 , # players do
+        if players[i].site == data.site then
+            table.remove(players,i)
+            self:removeNodeForSite(data)
+            return
+        end
+    end
+end
+
+function RoommateView:removeNodeForSite(data)
+    for index, v in ipairs(self.headNodes) do
+        if v.site == data.site then
+            local parentNode = v.node
+            parentNode:removeAllChildren()
+
+            local headNode = bole:getNewHeadView()
+            parentNode:addChild(headNode)
+            headNode:updatePos(headNode.POS_SPIN_INTIVE)
+            v.user_id = nil
+            v.site = nil
+            v.head = headNode
+            --            v.info = nil
+            return
+        end
+    end
+end
+
+function RoommateView:removeUser(data)
+    local players = self.theme.roomInfo.other_players
+    for i = 1 , # players do
+        if players[i].user_id == data.user_id then
+            table.remove(players,i)
+            return
+        end
+    end
 end
 
 return RoommateView

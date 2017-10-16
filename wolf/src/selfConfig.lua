@@ -5,10 +5,10 @@
 function bole:getDeviceId()
     local imme = bole.getIMEI()
     if imme == "" then
-        imme = "b12"
+        imme = "m5"
     end
     return imme
-end 
+end
 
 function bole:getMacAddress()
     local macAddress = bole.getMacID()
